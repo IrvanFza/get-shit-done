@@ -3709,7 +3709,7 @@ function uninstall(isGlobal, runtime = 'claude') {
   // 4. Remove GSD hooks
   const hooksDir = path.join(targetDir, 'hooks');
   if (fs.existsSync(hooksDir)) {
-    const gsdHooks = ['gsd-statusline.js', 'gsd-check-update.js', 'gsd-check-update.sh', 'gsd-context-monitor.js', 'gsd-prompt-guard.js'];
+    const gsdHooks = ['gsd-statusline.js', 'gsd-check-update.js', 'gsd-check-update.sh', 'gsd-context-monitor.js', 'gsd-prompt-guard.js', 'gsd-session-state.sh', 'gsd-validate-commit.sh', 'gsd-phase-boundary.sh'];
     let hookCount = 0;
     for (const hook of gsdHooks) {
       const hookPath = path.join(hooksDir, hook);
@@ -4808,6 +4808,75 @@ function install(isGlobal, runtime = 'claude') {
         ]
       });
       console.log(`  ${green}✓${reset} Configured prompt injection guard hook`);
+    }
+
+    // Community hooks — registered on install but opt-in at runtime.
+    // Each hook checks .planning/config.json for hooks.community: true
+    // and exits silently (no-op) if not enabled. This lets users enable
+    // them per-project by adding: "hooks": { "community": true }
+
+    // Configure commit validation hook (Conventional Commits enforcement, opt-in)
+    const validateCommitCommand = isGlobal
+      ? 'bash ' + targetDir.replace(/\\/g, '/') + '/hooks/gsd-validate-commit.sh'
+      : 'bash ' + dirName + '/hooks/gsd-validate-commit.sh';
+    const hasValidateCommitHook = settings.hooks[preToolEvent].some(entry =>
+      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-validate-commit'))
+    );
+
+    if (!hasValidateCommitHook) {
+      settings.hooks[preToolEvent].push({
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command: validateCommitCommand,
+            timeout: 5
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured commit validation hook (opt-in via config)`);
+    }
+
+    // Configure session state orientation hook (opt-in)
+    const sessionStateCommand = isGlobal
+      ? 'bash ' + targetDir.replace(/\\/g, '/') + '/hooks/gsd-session-state.sh'
+      : 'bash ' + dirName + '/hooks/gsd-session-state.sh';
+    const hasSessionStateHook = settings.hooks.SessionStart.some(entry =>
+      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-session-state'))
+    );
+
+    if (!hasSessionStateHook) {
+      settings.hooks.SessionStart.push({
+        hooks: [
+          {
+            type: 'command',
+            command: sessionStateCommand
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured session state orientation hook (opt-in via config)`);
+    }
+
+    // Configure phase boundary detection hook (opt-in)
+    const phaseBoundaryCommand = isGlobal
+      ? 'bash ' + targetDir.replace(/\\/g, '/') + '/hooks/gsd-phase-boundary.sh'
+      : 'bash ' + dirName + '/hooks/gsd-phase-boundary.sh';
+    const hasPhaseBoundaryHook = settings.hooks[postToolEvent].some(entry =>
+      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-phase-boundary'))
+    );
+
+    if (!hasPhaseBoundaryHook) {
+      settings.hooks[postToolEvent].push({
+        matcher: 'Write|Edit',
+        hooks: [
+          {
+            type: 'command',
+            command: phaseBoundaryCommand,
+            timeout: 5
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured phase boundary detection hook (opt-in via config)`);
     }
   }
 
