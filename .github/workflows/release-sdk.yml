@@ -18,7 +18,7 @@
 # remain the canonical two-package publish path; restore them to primary
 # use once @gsd-build/sdk ownership is recovered.
 #
-# Tracking issue: #2925
+# Tracking issues: #2925 (initial workflow), #2929 (CI-gate parity with release.yml)
 
 name: Release SDK Bundle
 
@@ -57,11 +57,22 @@ env:
   NODE_VERSION: 24
 
 jobs:
+  # Cross-platform install validation gate (parity with release.yml).
+  # Publish job depends on this — won't proceed if the package fails to
+  # install cleanly across the supported matrix.
+  install-smoke:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/install-smoke.yml
+    with:
+      ref: ${{ inputs.ref }}
+
   release:
+    needs: install-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write       # tag + push
+      contents: write       # tag + push + GitHub Release
       id-token: write       # provenance
     environment: npm-publish
     steps:
@@ -126,13 +137,22 @@ jobs:
             exit 1
           fi
 
-      - name: Refuse if git tag already exists
+      # Tolerant tag-existence check (matches release.yml pattern). An
+      # operator re-running after a mid-flight publish-step failure should
+      # not be blocked just because the tag step succeeded last time. Only
+      # error if the existing tag points at a different commit than HEAD.
+      - name: Check git tag (skip if matches HEAD, error if mismatched)
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-            echo "::error::git tag v${VERSION} already exists. Bump version or pass an explicit override input."
-            exit 1
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            EXISTING_SHA=$(git rev-parse "refs/tags/v${VERSION}")
+            HEAD_SHA=$(git rev-parse HEAD)
+            if [ "$EXISTING_SHA" != "$HEAD_SHA" ]; then
+              echo "::error::git tag v${VERSION} already exists pointing at ${EXISTING_SHA}, but HEAD is ${HEAD_SHA}"
+              exit 1
+            fi
+            echo "::notice::tag v${VERSION} already exists at HEAD; tag step will skip"
           fi
 
       - name: Configure git identity
@@ -150,8 +170,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run full test suite
-        run: npm test
+      - name: Run full test suite with coverage (parity with release.yml)
+        run: npm run test:coverage
 
       - name: Build SDK dist for tarball
         run: npm run build:sdk
@@ -224,7 +244,11 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          git tag "v${VERSION}"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "Tag v${VERSION} already exists at HEAD (per pre-flight check); skipping git tag step"
+          else
+            git tag "v${VERSION}"
+          fi
           git push origin "v${VERSION}"
 
       - name: Publish to npm (CC bundle, SDK included as both loose tree and .tgz)
@@ -233,6 +257,42 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public --tag "$TAG"
+
+      # Keep `next` from going stale relative to `latest`. When publishing a
+      # stable release, also point `next` at it so users on `@next` don't
+      # get stuck on an older pre-release than what's now stable. Parity
+      # with release.yml#finalize "Clean up next dist-tag" step.
+      - name: Re-point next dist-tag at the new latest (only when tag=latest)
+        if: ${{ !inputs.dry_run && steps.ver.outputs.tag == 'latest' }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm dist-tag add "get-shit-done-cc@${VERSION}" next
+          echo "✅ next dist-tag re-pointed to v${VERSION} (matches latest)"
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          # Per-tag release flags:
+          #   dev, next → --prerelease (won't be highlighted as the latest release on the repo page)
+          #   latest    → --latest (becomes the highlighted release)
+          if [ "$TAG" = "latest" ]; then
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --latest
+          else
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --prerelease
+          fi
+          echo "✅ GitHub Release v${VERSION} created"
 
       - name: Verify publish landed on registry
         if: ${{ !inputs.dry_run }}
@@ -269,12 +329,16 @@ jobs:
           echo "## Release SDK Bundle: v${VERSION} → @${TAG}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ "$DRY_RUN" = "true" ]; then
-            echo "**DRY RUN** — npm publish, git tag, and push were skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "**DRY RUN** — npm publish, git tag, push, and GitHub Release were skipped." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- Published \`get-shit-done-cc@${VERSION}\` to dist-tag \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "- SDK bundled inside the CC tarball at:" >> "$GITHUB_STEP_SUMMARY"
             echo "  - \`sdk/dist/cli.js\` (loose tree, consumed by \`bin/gsd-sdk.js\` shim)" >> "$GITHUB_STEP_SUMMARY"
             echo "  - \`sdk-bundle/gsd-sdk.tgz\` (npm-installable artifact)" >> "$GITHUB_STEP_SUMMARY"
             echo "- Git tag \`v${VERSION}\` pushed" >> "$GITHUB_STEP_SUMMARY"
+            echo "- GitHub Release \`v${VERSION}\` created" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$TAG" = "latest" ]; then
+              echo "- \`next\` dist-tag re-pointed at \`v${VERSION}\` (kept current with \`latest\`)" >> "$GITHUB_STEP_SUMMARY"
+            fi
             echo "- Install: \`npm install -g get-shit-done-cc@${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
           fi
