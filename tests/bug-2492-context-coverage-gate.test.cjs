@@ -175,6 +175,5 @@ describe('SDK wiring for #2492 gates', () => {
     assert.ok(c.includes('REGISTRY_ASSEMBLY_PLAN'), 'registry assembly must be driven by declarative plan');
     assert.ok(d.includes('VERIFY_DECISION_STATIC_CATALOG'), 'decision-coverage handlers must be sourced from verify-decision catalog');
     assert.ok(d.includes("{ kind: 'static', key: 'VERIFY_DECISION_STATIC_CATALOG' }"), 'verify-decision catalog must be present in assembly plan');
-    assert.ok(d.includes('decisions.parse') || d.includes('VERIFY_DECISION_STATIC_CATALOG'), 'decisions.parse handler must be registered');
   });
 });
