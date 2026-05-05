@@ -6,8 +6,8 @@ import type { QueryResult } from './query/utils.js';
 export interface QueryNativeDirectAdapterDeps {
   timeoutMs: number;
   dispatch: (registryCommand: string, registryArgs: string[]) => Promise<QueryResult>;
-  createTimeoutError: (message: string, command: string, args: string[]) => Error;
-  createFailureError: (message: string, command: string, args: string[], cause: unknown) => Error;
+  createTimeoutError: (message: string, command: string, args: string[]) => GSDToolsError;
+  createFailureError: (message: string, command: string, args: string[], cause: unknown) => GSDToolsError;
 }
 
 /**
