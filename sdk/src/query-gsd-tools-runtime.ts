@@ -52,8 +52,8 @@ export function createGSDToolsRuntime(opts: {
       request.registryCommand,
       request.registryArgs,
     ),
-    execSubprocessJson: async (legacyCommand, legacyArgs) => subprocessAdapter.execJson(legacyCommand, legacyArgs),
-    execSubprocessRaw: async (legacyCommand, legacyArgs) => subprocessAdapter.execRaw(legacyCommand, legacyArgs),
+    execSubprocessJson: (legacyCommand, legacyArgs) => subprocessAdapter.execJson(legacyCommand, legacyArgs),
+    execSubprocessRaw: (legacyCommand, legacyArgs) => subprocessAdapter.execRaw(legacyCommand, legacyArgs),
     formatNativeRaw: (registryCommand, data) => formatQueryRawOutput(registryCommand, data),
   });
 

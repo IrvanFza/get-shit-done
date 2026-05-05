@@ -107,10 +107,6 @@ export class GSDTools {
     return resolveQueryCommand(command, args, this.registry);
   }
 
-  private toToolsError(command: string, args: string[], err: unknown): GSDToolsError {
-    return toToolsErrorFromUnknown(command, args, err);
-  }
-
   private async dispatchNativeHotpath(
     legacyCommand: string,
     legacyArgs: string[],
@@ -133,7 +129,7 @@ export class GSDTools {
       return await work();
     } catch (err) {
       if (err instanceof GSDToolsError) throw err;
-      throw this.toToolsError(command, args, err);
+      throw toToolsErrorFromUnknown(command, args, err);
     }
   }
 
