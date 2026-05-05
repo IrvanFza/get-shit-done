@@ -792,19 +792,13 @@ function parseWorktreePorcelain(porcelain) {
 }
 
 /**
- * Remove linked git worktrees whose branch has already been merged into the
- * current HEAD of the main worktree.  Also runs `git worktree prune` to clear
- * any stale references left by manually-deleted worktree directories.
+ * Clear stale worktree metadata references via `git worktree prune`.
  *
- * Safe guards:
- *  - Never removes the main worktree (first entry in --porcelain output).
- *  - Never removes the worktree at process.cwd().
- *  - Never removes a worktree whose branch has unmerged commits.
- *  - Skips detached-HEAD worktrees (no branch name).
+ * Destructive linked-worktree removal is disabled by default for safety.
  *
  * @param {string} repoRoot - absolute path to the main (or any) worktree of
  *   the repository; used as `cwd` for git commands.
- * @returns {string[]} list of worktree paths that were removed
+ * @returns {string[]} list of worktree paths that were removed (always empty)
  */
 function pruneOrphanedWorktrees(repoRoot) {
   const pruned = [];
@@ -821,37 +815,14 @@ function pruneOrphanedWorktrees(repoRoot) {
       return pruned;
     }
 
-    // 2. First entry is the main worktree — never touch it
-    const mainWorktreePath = worktrees[0].path;
-
-    // 3. Check each non-main worktree
-    for (let i = 1; i < worktrees.length; i++) {
-      const { path: wtPath, branch } = worktrees[i];
-
-      // Never remove the worktree for the current process directory
-      if (wtPath === cwd || cwd.startsWith(wtPath + path.sep)) continue;
-
-      // Check if the branch is fully merged into HEAD (main)
-      // git merge-base --is-ancestor <branch> HEAD exits 0 when merged
-      const ancestorCheck = execGit(repoRoot, [
-        'merge-base', '--is-ancestor', branch, 'HEAD',
-      ]);
-
-      if (ancestorCheck.exitCode !== 0) {
-        // Not yet merged — leave it alone
-        continue;
-      }
-
-      // Remove the worktree and delete the branch
-      const removeResult = execGit(repoRoot, ['worktree', 'remove', '--force', wtPath]);
-      if (removeResult.exitCode === 0) {
-        execGit(repoRoot, ['branch', '-D', branch]);
-        pruned.push(wtPath);
-      }
-    }
+    // Destructive removal of linked worktrees is intentionally disabled.
+    // Keep metadata cleanup only (git worktree prune), which clears stale refs
+    // for manually-deleted directories without removing active sibling worktrees.
+    void cwd;
+    void worktrees;
   } catch { /* never crash the caller */ }
 
-  // 4. Always run prune to clear stale references (e.g. manually-deleted dirs)
+  // Always run prune to clear stale references (e.g. manually-deleted dirs)
   execGit(repoRoot, ['worktree', 'prune']);
 
   return pruned;
