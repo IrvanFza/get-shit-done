@@ -46,7 +46,7 @@ npx get-shit-done-cc@latest
 ---
 
 > [!IMPORTANT]
-> ### Returning to GSD?
+> **Returning to GSD?**
 >
 > Run `/gsd-map-codebase` to re-index your codebase, then `/gsd-new-project` to rebuild GSD's planning context. Your code is fine — GSD just needs its context rebuilt. See the [CHANGELOG](CHANGELOG.md) for what's new.
 
