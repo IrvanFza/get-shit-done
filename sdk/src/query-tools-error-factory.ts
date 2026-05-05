@@ -1,7 +1,33 @@
 import { GSDError, exitCodeFor } from './errors.js';
 import { GSDToolsError } from './gsd-tools-error.js';
 import { errorMessage, toFailureSignal } from './query-failure-classification.js';
-import type { QueryNativeErrorFactory, QueryToolsErrorFactory } from './query-tools-error-seam.js';
+
+export interface QueryTimeoutErrorFactory {
+  createTimeoutError: (
+    message: string,
+    command: string,
+    args: string[],
+    stderr: string,
+    timeoutMs: number,
+  ) => GSDToolsError;
+}
+
+export interface QueryFailureErrorFactory {
+  createFailureError: (
+    message: string,
+    command: string,
+    args: string[],
+    exitCode: number | null,
+    stderr: string,
+  ) => GSDToolsError;
+}
+
+export type QueryToolsErrorFactory = QueryTimeoutErrorFactory & QueryFailureErrorFactory;
+
+export interface QueryNativeErrorFactory {
+  createNativeTimeoutError: (message: string, command: string, args: string[]) => GSDToolsError;
+  createNativeFailureError: (message: string, command: string, args: string[], cause: unknown) => GSDToolsError;
+}
 
 export function timeoutToolsError(message: string, command: string, args: string[], stderr = '', timeoutMs?: number): GSDToolsError {
   return GSDToolsError.timeout(message, command, args, stderr, timeoutMs);

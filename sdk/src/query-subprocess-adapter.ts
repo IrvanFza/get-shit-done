@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { timeoutMessage } from './query-failure-classification.js';
-import type { QueryToolsErrorFactory } from './query-tools-error-seam.js';
+import type { QueryToolsErrorFactory } from './query-tools-error-factory.js';
 
 export interface QuerySubprocessAdapterDeps extends QueryToolsErrorFactory {
   projectDir: string;

@@ -1,7 +1,7 @@
 import { formatQueryRawOutput } from './query-raw-output-projection.js';
 import { GSDToolsError } from './gsd-tools-error.js';
 import { errorMessage, timeoutMessage } from './query-failure-classification.js';
-import type { QueryNativeErrorFactory } from './query-tools-error-seam.js';
+import type { QueryNativeErrorFactory } from './query-tools-error-factory.js';
 import type { QueryResult } from './query/utils.js';
 
 export interface QueryNativeDirectAdapterDeps extends QueryNativeErrorFactory {
