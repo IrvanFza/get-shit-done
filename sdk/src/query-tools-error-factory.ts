@@ -29,11 +29,11 @@ export interface QueryNativeErrorFactory {
   createNativeFailureError: (message: string, command: string, args: string[], cause: unknown) => GSDToolsError;
 }
 
-export function timeoutToolsError(message: string, command: string, args: string[], stderr = '', timeoutMs?: number): GSDToolsError {
+function timeoutToolsError(message: string, command: string, args: string[], stderr = '', timeoutMs?: number): GSDToolsError {
   return GSDToolsError.timeout(message, command, args, stderr, timeoutMs);
 }
 
-export function failureToolsError(
+function failureToolsError(
   message: string,
   command: string,
   args: string[],
