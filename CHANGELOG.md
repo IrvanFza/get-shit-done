@@ -309,6 +309,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pre-existing sentinel force-removes the orphan worktree before starting fresh, making
   the agent self-healing across crashes. (#2839)
 
+### Fixed
+
+- **Task→Agent dispatcher rename complete** — `commands/gsd/*.md` allowed-tools,
+  `get-shit-done/workflows/*.md` prose (~133 call sites), and
+  `agents/gsd-debug-session-manager.md` tools frontmatter now reference `Agent`
+  (the Claude Code subagent dispatcher) instead of `Task`. Prevents orchestrators
+  from silently falling back to inline execution when no `Task` tool exists on
+  their tool surface. (#3168)
+
 
 ## [1.39.1] - 2026-05-01
 
