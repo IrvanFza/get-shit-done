@@ -99,4 +99,50 @@ describe('QueryRuntimeBridge observability', () => {
       }),
     );
   });
+
+  it('emits subprocess hotpath event when native query is disabled', async () => {
+    const onDispatchEvent = vi.fn();
+    const bridge = new QueryRuntimeBridge(
+      { has: () => true } as never,
+      { execute: vi.fn() } as never,
+      { dispatch: vi.fn(async () => 'ok') } as never,
+      () => false,
+      { onDispatchEvent, allowFallbackToSubprocess: true },
+    );
+
+    await bridge.dispatchHotpath('commit', ['msg'], 'commit', ['msg'], 'raw');
+
+    expect(onDispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'query_hotpath_dispatch',
+        command: 'commit',
+        dispatchMode: 'subprocess',
+        outcome: 'success',
+      }),
+    );
+  });
+
+  it('blocks subprocess hotpath when fallback is disabled', async () => {
+    const onDispatchEvent = vi.fn();
+    const bridge = new QueryRuntimeBridge(
+      { has: () => true } as never,
+      { execute: vi.fn() } as never,
+      { dispatch: vi.fn(async () => 'ok') } as never,
+      () => false,
+      { onDispatchEvent, allowFallbackToSubprocess: false },
+    );
+
+    await expect(
+      bridge.dispatchHotpath('commit', ['msg'], 'commit', ['msg'], 'raw'),
+    ).rejects.toThrow("Subprocess fallback disabled");
+
+    expect(onDispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'query_hotpath_dispatch',
+        command: 'commit',
+        dispatchMode: 'subprocess',
+        outcome: 'error',
+      }),
+    );
+  });
 });

@@ -34,7 +34,7 @@ export interface RuntimeBridgeHotpathEvent {
   command: string;
   legacyCommand: string;
   mode: TransportMode;
-  dispatchMode: 'native_hotpath';
+  dispatchMode: 'native_hotpath' | 'subprocess';
   durationMs: number;
   outcome: 'success' | 'error';
   errorKind?: 'timeout' | 'failure';
@@ -153,6 +153,28 @@ export class QueryRuntimeBridge {
     mode: TransportMode,
   ): Promise<unknown> {
     const startedAt = Date.now();
+    const useNative = this.shouldUseNativeQuery();
+
+    if (!useNative && this.options?.allowFallbackToSubprocess === false) {
+      const error = GSDToolsError.failure(
+        `Subprocess fallback disabled: command '${registryCommand}' cannot run without native dispatch`,
+        legacyCommand,
+        legacyArgs,
+        null,
+      );
+      this.emit({
+        type: 'query_hotpath_dispatch',
+        command: registryCommand,
+        legacyCommand,
+        mode,
+        dispatchMode: 'subprocess',
+        durationMs: Date.now() - startedAt,
+        outcome: 'error',
+        errorKind: 'failure',
+      });
+      throw error;
+    }
+
     try {
       const result = await this.nativeHotpathAdapter.dispatch(
         legacyCommand,
@@ -166,7 +188,7 @@ export class QueryRuntimeBridge {
         command: registryCommand,
         legacyCommand,
         mode,
-        dispatchMode: 'native_hotpath',
+        dispatchMode: useNative ? 'native_hotpath' : 'subprocess',
         durationMs: Date.now() - startedAt,
         outcome: 'success',
       });
@@ -178,7 +200,7 @@ export class QueryRuntimeBridge {
         command: registryCommand,
         legacyCommand,
         mode,
-        dispatchMode: 'native_hotpath',
+        dispatchMode: useNative ? 'native_hotpath' : 'subprocess',
         durationMs: Date.now() - startedAt,
         outcome: 'error',
         errorKind: kind,

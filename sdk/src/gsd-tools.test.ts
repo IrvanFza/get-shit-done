@@ -195,8 +195,8 @@ describe('GSDTools', () => {
         allowFallbackToSubprocess: true,
       });
 
-      await expect(tools.exec('nonexistent-command', [])).rejects.toThrow(
-        "Strict SDK mode: command 'nonexistent-command' has no native adapter",
+      await expect(tools.exec('graphify', [])).rejects.toThrow(
+        "Strict SDK mode: command 'graphify' has no native adapter",
       );
     });
 
