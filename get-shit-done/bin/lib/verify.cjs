@@ -396,6 +396,37 @@ function cmdVerifyKeyLinks(cwd, planFilePath, raw) {
   }, raw, verified === results.length ? 'valid' : 'invalid');
 }
 
+// Returns a Set of phase numbers found on disk, scanning both the flat
+// .planning/phases/ layout and the milestone-archive .planning/milestones/v*-phases/ layout.
+function collectDiskPhases(planBase) {
+  const diskPhases = new Set();
+  const scanDir = (dir) => {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          const m = e.name.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
+          if (m) diskPhases.add(m[1]);
+        }
+      }
+    } catch { /* dir absent */ }
+  };
+
+  scanDir(path.join(planBase, 'phases'));
+
+  try {
+    const milestonesDir = path.join(planBase, 'milestones');
+    const entries = fs.readdirSync(milestonesDir, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && /^v\d+.*-phases$/.test(e.name)) {
+        scanDir(path.join(milestonesDir, e.name));
+      }
+    }
+  } catch { /* no milestones dir */ }
+
+  return diskPhases;
+}
+
 function cmdValidateConsistency(cwd, raw) {
   const roadmapPath = path.join(planningDir(cwd), 'ROADMAP.md');
   const phasesDir = path.join(planningDir(cwd), 'phases');
@@ -420,16 +451,8 @@ function cmdValidateConsistency(cwd, raw) {
     roadmapPhases.add(m[1]);
   }
 
-  // Get phases on disk
-  const diskPhases = new Set();
-  try {
-    const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
-    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
-    for (const dir of dirs) {
-      const dm = dir.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
-      if (dm) diskPhases.add(dm[1]);
-    }
-  } catch { /* intentionally empty */ }
+  // Get phases on disk (flat layout + milestone-archive layout)
+  const diskPhases = collectDiskPhases(planningDir(cwd));
 
   // Check: phases in ROADMAP but not on disk
   for (const p of roadmapPhases) {
@@ -598,16 +621,7 @@ function cmdValidateHealth(cwd, options, raw) {
     // (not yet materialized on disk) and shipped-milestone history phases
     // (archived / cleared off disk). Matching only against on-disk dirs
     // produces false W002 warnings in both cases.
-    const validPhases = new Set();
-    try {
-      const entries = fs.readdirSync(phasesDir, { withFileTypes: true });
-      for (const e of entries) {
-        if (e.isDirectory()) {
-          const m = e.name.match(/^(\d+[A-Z]?(?:\.\d+)*)/);
-          if (m) validPhases.add(m[1]);
-        }
-      }
-    } catch { /* intentionally empty */ }
+    const validPhases = collectDiskPhases(planBase);
     // Union in every phase declared anywhere in ROADMAP.md (current + shipped + backlog).
     try {
       if (fs.existsSync(roadmapPath)) {
@@ -765,11 +779,7 @@ function cmdValidateHealth(cwd, options, raw) {
       roadmapPhases.add(m[1]);
     }
 
-    const diskPhases = new Set();
-    for (const e of phaseDirEntries) {
-      const dm = e.name.match(/^(\d+[A-Z]?(?:\.\d+)*)/i);
-      if (dm) diskPhases.add(dm[1]);
-    }
+    const diskPhases = collectDiskPhases(planBase);
 
     // Build a set of phases explicitly marked not-yet-started in the ROADMAP
     // summary list (- [ ] **Phase N:**). These phases are intentionally absent

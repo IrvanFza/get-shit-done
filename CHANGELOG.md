@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased](https://github.com/gsd-build/get-shit-done/compare/v1.39.1...HEAD)
 
+### Fixed
+
+- **Milestone-archive layout support** — `validate consistency`, `validate health`, and `find-phase` now scan `.planning/milestones/v*-phases/` directories in addition to the flat `.planning/phases/` layout. Projects that have graduated to milestone-archive layout no longer receive spurious W006 "Phase N in ROADMAP.md but no directory on disk" warnings for every active phase. (#3164)
+
 ### Feature
 
 - **Six namespace meta-skills with keyword-tag descriptions** — replace the flat 86-skill
