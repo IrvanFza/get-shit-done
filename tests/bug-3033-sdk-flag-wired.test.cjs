@@ -166,7 +166,7 @@ describe('bug #3033: --sdk flag (opts.forceSdk) must be wired into installSdkIfN
         installSdkIfNeeded({ sdkDir, isLocal: true });
       });
     } catch (e) {
-      // If process.exit was called, the test should fail below.
+      if (!exitCalled) throw e;
     } finally {
       process.exit = origExit;
     }
