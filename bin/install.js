@@ -7743,6 +7743,14 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   // every supported runtime uses this same planner/apply/report path, while
   // individual migration records decide whether a runtime-specific config
   // rewrite is allowed by that runtime's documented ownership boundary.
+  // #3245 CR finding 2 — wrap the pre-config install operations in a try/catch so
+  // that ANY throw between snapshot capture and the Codex config block triggers rollback.
+  // Non-Codex paths are unaffected (_codexPreConfigRollback is null for them).
+  //
+  // agentsSrc is declared here (let, not const) because installCodexConfig() inside the
+  // Codex config block below also references it, and that block is outside the try scope.
+  let agentsSrc = path.join(src, 'agents');
+  try {
   installerMigrationResult = runInstallerMigrations({
     configDir: targetDir,
     runtime,
@@ -7752,15 +7760,6 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   });
   reportInstallerMigrationResult(installerMigrationResult);
   assertInstallerMigrationsUnblocked(installerMigrationResult);
-
-  // #3245 CR finding 2 — wrap the pre-config install operations in a try/catch so
-  // that ANY throw between snapshot capture and the Codex config block triggers rollback.
-  // Non-Codex paths are unaffected (_codexPreConfigRollback is null for them).
-  //
-  // agentsSrc is declared here (let, not const) because installCodexConfig() inside the
-  // Codex config block below also references it, and that block is outside the try scope.
-  let agentsSrc = path.join(src, 'agents');
-  try {
 
   // OpenCode/Kilo use command/ (flat), Codex uses skills/, Claude/Gemini use commands/gsd/
   if (isOpencode || isKilo) {

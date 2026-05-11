@@ -1,5 +1,7 @@
 'use strict';
 
+const path = require('path');
+
 function requireNonEmptyString(record, field, source) {
   if (typeof record[field] !== 'string' || record[field].trim() === '') {
     throw new Error(`migration record must include a non-empty ${field}: ${source}`);
@@ -67,6 +69,18 @@ function requireActionEvidence(action, field, migration) {
   }
 }
 
+function validateSafeRelPath(relPath, migration, actionType) {
+  const source = actionSource(migration, { relPath });
+  const normalized = relPath.replace(/\\/g, '/');
+  if (path.isAbsolute(normalized) || path.win32.isAbsolute(normalized)) {
+    throw new Error(`migration action ${actionType} relPath must stay inside configDir: ${source}`);
+  }
+  const segments = normalized.split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw new Error(`migration action ${actionType} relPath must stay inside configDir: ${source}`);
+  }
+}
+
 function validateInstallerMigrationActions(actions, migration) {
   if (!Array.isArray(actions)) {
     throw new Error(`migration ${migration.id} plan must return an array`);
@@ -82,6 +96,7 @@ function validateInstallerMigrationActions(actions, migration) {
     if (typeof action.relPath !== 'string' || action.relPath.trim() === '') {
       throw new Error(`migration action ${action.type} must include a non-empty relPath: ${migration.id}`);
     }
+    validateSafeRelPath(action.relPath, migration, action.type);
     // Ownership and runtime-contract evidence are required by
     // docs/installer-migrations.md#action-types and
     // docs/adr/0008-installer-migration-module.md#runtime-contract-decision.

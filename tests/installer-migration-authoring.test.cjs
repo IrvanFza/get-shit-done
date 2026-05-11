@@ -144,6 +144,39 @@ test('rejects destructive migration actions without ownership evidence', (t) => 
   );
 });
 
+test('rejects migration actions with absolute or traversal relPaths', (t) => {
+  const configDir = createTempDir('gsd-migration-authoring-relpath-');
+  t.after(() => cleanup(configDir));
+
+  fs.writeFileSync(
+    path.join(configDir, 'gsd-file-manifest.json'),
+    JSON.stringify({ version: '1.50.0', timestamp: '2026-05-11T00:00:00.000Z', mode: 'full', files: {} }),
+    'utf8'
+  );
+
+  for (const relPath of ['/tmp/outside.js', 'hooks/../outside.js', 'hooks/..', '.']) {
+    assert.throws(
+      () => planInstallerMigrations({
+        configDir,
+        migrations: [
+          completeMigrationRecord({
+            plan: () => [
+              {
+                type: 'remove-managed',
+                relPath,
+                reason: 'bad path',
+                ownershipEvidence: 'test fixture manifest-managed hook',
+              },
+            ],
+          }),
+        ],
+        scope: 'global',
+      }),
+      /relPath must stay inside configDir/
+    );
+  }
+});
+
 test('rejects runtime config rewrites without a runtime contract citation', (t) => {
   const configDir = createTempDir('gsd-migration-authoring-runtime-');
   t.after(() => cleanup(configDir));

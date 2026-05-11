@@ -20,9 +20,16 @@ module.exports = {
     const actions = [];
     for (const relPath of LEGACY_ORPHAN_FILES) {
       const artifact = classifyArtifact(relPath);
-      if (artifact.classification === 'managed-pristine' || artifact.classification === 'managed-modified') {
+      if (artifact.classification === 'managed-pristine') {
         actions.push({
           type: 'remove-managed',
+          relPath,
+          reason: 'legacy orphan hook file retired by installer migration',
+          ownershipEvidence: 'legacy hook path is manifest-managed in gsd-file-manifest.json',
+        });
+      } else if (artifact.classification === 'managed-modified') {
+        actions.push({
+          type: 'backup-and-remove',
           relPath,
           reason: 'legacy orphan hook file retired by installer migration',
           ownershipEvidence: 'legacy hook path is manifest-managed in gsd-file-manifest.json',

@@ -1128,6 +1128,41 @@ test('runs discovered installer migrations against manifest-managed legacy orpha
   }
 });
 
+test('backs up modified legacy orphan files before removing them', () => {
+  const configDir = createTempInstall();
+  try {
+    writeFile(configDir, 'hooks/statusline.js', 'user modified legacy hook\n');
+    writeManifest(configDir, {
+      'hooks/statusline.js': sha256('legacy managed hook\n'),
+    });
+
+    const plan = planInstallerMigrations({
+      configDir,
+      migrations: discoverInstallerMigrations({
+        migrationsDir: path.join(__dirname, '..', 'get-shit-done', 'bin', 'lib', 'installer-migrations'),
+      }),
+      scope: 'global',
+      now: () => '2026-05-11T00:00:05.000Z',
+    });
+    const action = plan.actions.find((item) => item.relPath === 'hooks/statusline.js');
+
+    assert.equal(action.type, 'backup-and-remove');
+
+    const result = runInstallerMigrations({
+      configDir,
+      scope: 'global',
+      now: () => '2026-05-11T00:00:05.000Z',
+    });
+    const journal = JSON.parse(fs.readFileSync(path.join(configDir, result.journalRelPath), 'utf8'));
+    const backupRelPath = journal.actions.find((item) => item.relPath === 'hooks/statusline.js').backupRelPath;
+
+    assert.equal(fs.existsSync(path.join(configDir, 'hooks/statusline.js')), false);
+    assert.equal(fs.readFileSync(path.join(configDir, backupRelPath), 'utf8'), 'user modified legacy hook\n');
+  } finally {
+    cleanup(configDir);
+  }
+});
+
 test('runs a Codex legacy hooks.json cleanup migration without removing user hooks', () => {
   const configDir = createTempInstall();
   try {
@@ -1159,6 +1194,40 @@ test('runs a Codex legacy hooks.json cleanup migration without removing user hoo
       'node "/Users/example/bin/gsd-check-update.js"',
     ]);
     assert.ok(result.appliedMigrationIds.includes('2026-05-11-codex-legacy-hooks-json'));
+  } finally {
+    cleanup(configDir);
+  }
+});
+
+test('preserves unrelated empty hooks.json structure while pruning legacy Codex hooks', () => {
+  const configDir = createTempInstall();
+  try {
+    writeFile(
+      configDir,
+      'hooks.json',
+      JSON.stringify({
+        SessionStart: [
+          legacyCodexHook(configDir),
+          { hooks: [] },
+          { metadata: null },
+        ],
+      }, null, 2)
+    );
+    writeManifest(configDir, {});
+
+    runInstallerMigrations({
+      configDir,
+      runtime: 'codex',
+      scope: 'global',
+      now: () => '2026-05-11T00:00:06.000Z',
+    });
+
+    const hooksJson = JSON.parse(fs.readFileSync(path.join(configDir, 'hooks.json'), 'utf8'));
+
+    assert.deepEqual(hooksJson.SessionStart, [
+      { hooks: [] },
+      { metadata: null },
+    ]);
   } finally {
     cleanup(configDir);
   }

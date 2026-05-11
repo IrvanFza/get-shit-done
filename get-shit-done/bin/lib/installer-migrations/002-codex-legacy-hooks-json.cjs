@@ -26,8 +26,8 @@ function pruneLegacyCodexHooksJsonValue(value, configDir) {
     for (const item of value) {
       const pruned = pruneLegacyCodexHooksJsonValue(item, configDir);
       if (pruned.changed) changed = true;
-      if (!isStructurallyEmpty(pruned.value)) next.push(pruned.value);
-      else changed = true;
+      if (pruned.changed && isStructurallyEmpty(pruned.value)) changed = true;
+      else next.push(pruned.value);
     }
     return { value: next, changed };
   }
@@ -42,8 +42,8 @@ function pruneLegacyCodexHooksJsonValue(value, configDir) {
     for (const [key, child] of Object.entries(value)) {
       const pruned = pruneLegacyCodexHooksJsonValue(child, configDir);
       if (pruned.changed) changed = true;
-      if (!isStructurallyEmpty(pruned.value)) next[key] = pruned.value;
-      else changed = true;
+      if (pruned.changed && isStructurallyEmpty(pruned.value)) changed = true;
+      else next[key] = pruned.value;
     }
     return { value: next, changed };
   }
