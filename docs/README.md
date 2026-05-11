@@ -9,6 +9,7 @@ Language versions: [English](README.md) · [Português (pt-BR)](pt-BR/README.md)
 | Document | Audience | Description |
 |----------|----------|-------------|
 | [Architecture](ARCHITECTURE.md) | Contributors, advanced users | System architecture, agent model, data flow, and internal design |
+| [Installer Migrations](installer-migrations.md) | Contributors | Architecture for safe install-time migrations, cleanup, preservation, dry-run planning, and rollback |
 | [Feature Reference](FEATURES.md) | All users | Feature narratives and requirements for released features (see [CHANGELOG](../CHANGELOG.md) for latest additions) |
 | [Command Reference](COMMANDS.md) | All users | Stable commands with syntax, flags, options, and examples |
 | [Configuration Reference](CONFIGURATION.md) | All users | Full config schema, workflow toggles, model profiles, git branching |

@@ -76,6 +76,9 @@ const {
   isMinimalMode,
   stageSkillsForMode,
 } = require(path.join(_gsdLibDir, 'install-profiles.cjs'));
+const {
+  runInstallerMigrations,
+} = require(path.join(_gsdLibDir, 'installer-migrations.cjs'));
 
 // Parse args
 const args = process.argv.slice(2);
@@ -6174,24 +6177,6 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
 }
 
 /**
- * Clean up orphaned files from previous GSD versions
- */
-function cleanupOrphanedFiles(configDir) {
-  const orphanedFiles = [
-    'hooks/gsd-notify.sh',  // Removed in v1.6.x
-    'hooks/statusline.js',  // Renamed to gsd-statusline.js in v1.9.0
-  ];
-
-  for (const relPath of orphanedFiles) {
-    const fullPath = path.join(configDir, relPath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
-      console.log(`  ${green}✓${reset} Removed orphaned ${relPath}`);
-    }
-  }
-}
-
-/**
  * Clean up orphaned hook registrations from settings.json
  */
 function cleanupOrphanedHooks(settings) {
@@ -7191,6 +7176,58 @@ function generateManifest(dir, baseDir) {
   return manifest;
 }
 
+function normalizeInstallRelativePath(relPath) {
+  if (typeof relPath !== 'string' || relPath.trim() === '' || relPath.includes('\0')) {
+    return null;
+  }
+  if (path.isAbsolute(relPath) || path.win32.isAbsolute(relPath)) {
+    return null;
+  }
+  const normalized = relPath.replace(/\\/g, '/');
+  const segments = normalized.split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    return null;
+  }
+  return segments.join('/');
+}
+
+function resolveInstallRelativePath(baseDir, relPath) {
+  const normalized = normalizeInstallRelativePath(relPath);
+  if (!normalized) return null;
+  const root = path.resolve(baseDir);
+  const fullPath = path.resolve(root, normalized);
+  if (fullPath !== root && !fullPath.startsWith(root + path.sep)) {
+    return null;
+  }
+  if (hasExistingSymlinkBetween(root, fullPath)) {
+    return null;
+  }
+  return { relPath: normalized, fullPath };
+}
+
+function hasExistingSymlinkBetween(root, fullPath) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedFullPath = path.resolve(fullPath);
+  if (resolvedFullPath !== resolvedRoot && !resolvedFullPath.startsWith(resolvedRoot + path.sep)) {
+    return true;
+  }
+
+  let cursor = resolvedRoot;
+  if (fs.existsSync(cursor) && fs.lstatSync(cursor).isSymbolicLink()) {
+    return true;
+  }
+
+  const relative = path.relative(resolvedRoot, resolvedFullPath);
+  for (const segment of relative.split(path.sep)) {
+    if (!segment) continue;
+    cursor = path.join(cursor, segment);
+    if (!fs.existsSync(cursor)) return false;
+    if (fs.lstatSync(cursor).isSymbolicLink()) return true;
+  }
+
+  return false;
+}
+
 /**
  * Write file manifest after installation for future modification detection
  */
@@ -7333,8 +7370,11 @@ function populatePristineDir({ packageSrc, pristineDir, modified, runtime, pathP
   let written = 0;
   try {
     const topLevels = new Set();
+    const safeModified = [];
     for (const relPath of modified) {
-      const norm = relPath.replace(/\\/g, '/');
+      const norm = normalizeInstallRelativePath(relPath);
+      if (!norm) continue;
+      safeModified.push(norm);
       const slash = norm.indexOf('/');
       topLevels.add(slash === -1 ? '' : norm.slice(0, slash));
     }
@@ -7344,14 +7384,16 @@ function populatePristineDir({ packageSrc, pristineDir, modified, runtime, pathP
         // Root-level files — copy directly from package source. The transform
         // pipeline is directory-oriented; root files don't need path-prefix
         // substitution (they're not markdown content with embedded paths).
-        for (const relPath of modified) {
-          const norm = relPath.replace(/\\/g, '/');
+        for (const relPath of safeModified) {
+          const norm = normalizeInstallRelativePath(relPath);
+          if (!norm) continue;
           if (norm.includes('/')) continue;
-          const src = path.join(packageSrc, relPath);
-          if (!fs.existsSync(src)) continue;
-          const stagedFile = path.join(stageRoot, relPath);
+          const srcRef = resolveInstallRelativePath(packageSrc, norm);
+          const stagedRef = resolveInstallRelativePath(stageRoot, norm);
+          if (!srcRef || !stagedRef || !fs.existsSync(srcRef.fullPath)) continue;
+          const stagedFile = stagedRef.fullPath;
           fs.mkdirSync(path.dirname(stagedFile), { recursive: true });
-          fs.copyFileSync(src, stagedFile);
+          fs.copyFileSync(srcRef.fullPath, stagedFile);
         }
         continue;
       }
@@ -7361,15 +7403,15 @@ function populatePristineDir({ packageSrc, pristineDir, modified, runtime, pathP
       copyWithPathReplacement(srcDir, stageDir, pathPrefix, runtime, false, isGlobal);
     }
 
-    for (const relPath of modified) {
+    for (const relPath of safeModified) {
       // Only populate pristine for paths we successfully staged. If a path's
       // source dir does not exist (obsolete manifest entry), skip silently
       // rather than corrupting pristine with stale data.
-      const stagedPath = path.join(stageRoot, relPath);
-      if (!fs.existsSync(stagedPath)) continue;
-      const out = path.join(pristineDir, relPath);
-      fs.mkdirSync(path.dirname(out), { recursive: true });
-      fs.copyFileSync(stagedPath, out);
+      const stagedRef = resolveInstallRelativePath(stageRoot, relPath);
+      const outRef = resolveInstallRelativePath(pristineDir, relPath);
+      if (!stagedRef || !outRef || !fs.existsSync(stagedRef.fullPath)) continue;
+      fs.mkdirSync(path.dirname(outRef.fullPath), { recursive: true });
+      fs.copyFileSync(stagedRef.fullPath, outRef.fullPath);
       written++;
     }
   } finally {
@@ -7408,17 +7450,23 @@ function saveLocalPatches(configDir, pristineCtx) {
   const patchesDir = path.join(configDir, PATCHES_DIR_NAME);
   const pristineDir = path.join(configDir, 'gsd-pristine');
   const modified = [];
+  const pristineHashes = {};
 
   for (const [relPath, originalHash] of Object.entries(manifest.files || {})) {
-    const fullPath = path.join(configDir, relPath);
+    const safeRef = resolveInstallRelativePath(configDir, relPath);
+    if (!safeRef) continue;
+    const { relPath: safeRelPath, fullPath } = safeRef;
     if (!fs.existsSync(fullPath)) continue;
     const currentHash = fileHash(fullPath);
     if (currentHash !== originalHash) {
       // Back up the user's modified version
-      const backupPath = path.join(patchesDir, relPath);
+      const backupRef = resolveInstallRelativePath(patchesDir, safeRelPath);
+      if (!backupRef) continue;
+      const backupPath = backupRef.fullPath;
       fs.mkdirSync(path.dirname(backupPath), { recursive: true });
       fs.copyFileSync(fullPath, backupPath);
-      modified.push(relPath);
+      modified.push(safeRelPath);
+      pristineHashes[safeRelPath] = originalHash;
     }
   }
 
@@ -7438,7 +7486,7 @@ function saveLocalPatches(configDir, pristineCtx) {
     // Record the original (pristine) hash for each modified file
     // This lets the reapply workflow verify reconstructed pristine files
     for (const relPath of modified) {
-      meta.pristine_hashes[relPath] = manifest.files[relPath];
+      meta.pristine_hashes[relPath] = pristineHashes[relPath];
     }
     fs.writeFileSync(path.join(patchesDir, 'backup-meta.json'), JSON.stringify(meta, null, 2));
     console.log('  ' + yellow + 'i' + reset + '  Found ' + modified.length + ' locally modified GSD file(s) — backed up to ' + PATCHES_DIR_NAME + '/');
@@ -7586,6 +7634,13 @@ function install(isGlobal, runtime = 'claude') {
 
   // Track installation failures
   const failures = [];
+  let installerMigrationResult = null;
+  const rollbackInstallerMigrations = () => {
+    if (!installerMigrationResult || typeof installerMigrationResult.rollback !== 'function') return;
+    const rollback = installerMigrationResult.rollback;
+    installerMigrationResult = null;
+    rollback();
+  };
 
   // Save any locally modified GSD files before they get wiped.
   // The pristine context lets saveLocalPatches populate gsd-pristine/ via
@@ -7598,8 +7653,8 @@ function install(isGlobal, runtime = 'claude') {
     isGlobal,
   });
 
-  // Clean up orphaned files from previous versions
-  cleanupOrphanedFiles(targetDir);
+  // Run manifest-backed cleanup migrations before package materialization.
+  installerMigrationResult = runInstallerMigrations({ configDir: targetDir });
 
   // #3245 — Codex idempotent rollback. Capture pre-install state of ALL
   // directories and files GSD will mutate so that any post-install validation
@@ -8391,6 +8446,7 @@ function install(isGlobal, runtime = 'claude') {
     // #3245 CR finding 2 — any throw in the pre-config install operations (skills copy,
     // agents copy, VERSION write, manifest write, etc.) triggers the Codex pre-config
     // rollback so the caller is never left in a partially-installed state.
+    rollbackInstallerMigrations();
     if (_codexPreConfigRollback) {
       _codexPreConfigRollback();
     }
@@ -8423,6 +8479,7 @@ function install(isGlobal, runtime = 'claude') {
     // existence checks. Safe to call before any snapshots are captured (variables
     // default to empty Set / null). Does NOT touch non-gsd-* user content.
     const restoreCodexSnapshot = () => {
+      rollbackInstallerMigrations();
       // 1. config.toml
       if (codexConfigPreInstallSnapshot !== null) {
         try { fs.writeFileSync(codexConfigPathPreInstall, codexConfigPreInstallSnapshot); }
@@ -10749,6 +10806,7 @@ if (process.env.GSD_TEST_MODE) {
     convertClaudeToCliineMarkdown,
     convertClaudeAgentToClineAgent,
     writeManifest,
+    saveLocalPatches,
     reportLocalPatches,
     validateHookFields,
     preserveUserArtifacts,

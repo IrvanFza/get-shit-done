@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-09",
+  "generated": "2026-05-11",
   "families": {
     "agents": [
       "gsd-advisor-researcher",
@@ -277,6 +277,7 @@
       "init-command-router.cjs",
       "init.cjs",
       "install-profiles.cjs",
+      "installer-migrations.cjs",
       "intel.cjs",
       "learnings.cjs",
       "milestone.cjs",

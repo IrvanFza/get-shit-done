@@ -609,6 +609,11 @@ The installer (`bin/install.js`, ~3,000 lines) handles:
 8. **Manifest tracking** — Writes `gsd-file-manifest.json` for clean uninstall
 9. **Uninstall mode** — `--uninstall` removes all GSD files, hooks, and settings
 
+Install-time file moves, stale-artifact cleanup, config rewrites, and user-data
+preservation are governed by the Installer Migration Module. See
+[Installer Migrations](installer-migrations.md) and
+[ADR 0008](adr/0008-installer-migration-module.md).
+
 ### Platform Handling
 
 - **Windows:** `windowsHide` on child processes, EPERM/EACCES protection on protected directories, path separator normalization
