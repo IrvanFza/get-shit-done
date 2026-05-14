@@ -18,6 +18,7 @@ const assert = require('node:assert/strict');
 
 const { composeStatusline } = require('../hooks/gsd-statusline.js');
 const { VALID_CONFIG_KEYS } = require('../get-shit-done/bin/lib/config-schema.cjs');
+const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 
 // ── Parity guard ─────────────────────────────────────────────────────────────
 
@@ -118,4 +119,31 @@ test('gsdUpdate warning is leftmost in "front" mode', () => {
   const ctx = ' \x1b[32m████░░░░░░ 40%\x1b[0m';
   const out = composeStatusline({ gsdUpdate, model: 'Claude', dirname: 'proj', ctx, position: 'front' });
   assert.ok(out.startsWith(gsdUpdate), `gsdUpdate should be leftmost in front mode; got: ${out}`);
+});
+
+// ── CLI write-path enforcement (config-set rejects invalid enum) ─────────────
+// Locked design: hard reject at config-set time AND silent fallback at runtime.
+// The runtime fallback is covered by the "Invalid position value silently falls
+// back" tests above. This test covers the other half — that the CLI write path
+// actually refuses to persist an invalid value in the first place.
+
+test('config-set rejects invalid statusline.context_position', () => {
+  const tmpDir = createTempProject();
+  try {
+    const r = runGsdTools(
+      ['config-set', 'statusline.context_position', 'middle'],
+      tmpDir,
+    );
+    assert.equal(
+      r.success,
+      false,
+      `config-set should exit non-zero on invalid enum; got success=${r.success}, output=${r.output}`,
+    );
+    assert.ok(
+      /statusline\.context_position|Invalid/i.test(r.error),
+      `stderr must reference key or "Invalid"; got: ${r.error}`,
+    );
+  } finally {
+    cleanup(tmpDir);
+  }
 });
