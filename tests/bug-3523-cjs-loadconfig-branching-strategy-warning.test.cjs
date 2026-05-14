@@ -57,11 +57,11 @@ const TEST_ENV_BASE = {
  * Run gsd-tools and return { stdout, stderr, status }.
  * Always captures stderr even when exit code is 0.
  */
-function runWithStderr(args, cwd) {
+function runWithStderr(args, cwd, env = {}) {
   const result = spawnSync(process.execPath, [TOOLS_PATH, ...args], {
     cwd,
     encoding: 'utf-8',
-    env: { ...process.env, ...TEST_ENV_BASE },
+    env: { ...process.env, ...TEST_ENV_BASE, ...env },
   });
   return {
     stdout: result.stdout || '',
@@ -127,6 +127,11 @@ describe('bug-3523 — no warning for legacy top-level branching_strategy', () =
     const result = runWithStderr(['config-get', 'git.branching_strategy'], tmpDir);
 
     assert.equal(
+      result.status,
+      0,
+      `config-get command must succeed — exit status ${result.status}, stderr: ${result.stderr}`
+    );
+    assert.equal(
       result.stderr.trim(),
       '',
       `No error should fire when reading migrated branching_strategy (#3523) — got: ${result.stderr}`
@@ -152,7 +157,7 @@ describe('bug-3523 — double-emission reduced to single-emission', () => {
     // Use a key that IS genuinely unknown (not branching_strategy, which is now
     // fixed) to verify the deduplication guard works for other keys too.
     // We verify that the count of warning lines for a single unknown key is
-    // at most 1 — not 2 — even if loadConfig is invoked twice internally.
+    // exactly once — not zero and not two — even if loadConfig is invoked twice internally.
     tmpDir = createTempProject('gsd-3523-dedup-');
     const configPath = path.join(tmpDir, '.planning', 'config.json');
     fs.writeFileSync(
@@ -171,9 +176,10 @@ describe('bug-3523 — double-emission reduced to single-emission', () => {
       .split('\n')
       .filter(l => l.includes('__gsd3523_dedup_sentinel__'));
 
-    assert.ok(
-      warningLines.length <= 1,
-      `Unknown-key warning must appear at most once per process invocation — ` +
+    assert.equal(
+      warningLines.length,
+      1,
+      `Unknown-key warning must appear exactly once per process invocation — ` +
       `appeared ${warningLines.length} times. stderr:\n${result.stderr}`
     );
   });
@@ -251,6 +257,64 @@ describe('bug-3523 — option 3 on-disk migration of branching_strategy', () => 
       'top-level branching_strategy should be removed even when git.branching_strategy already set'
     );
   });
+
+  test('workstream load also self-heals legacy root branching_strategy', () => {
+    tmpDir = createTempProject('gsd-3523-workstream-root-');
+    const rootConfigPath = path.join(tmpDir, '.planning', 'config.json');
+    const workstreamDir = path.join(tmpDir, '.planning', 'workstreams', 'alpha');
+    fs.mkdirSync(workstreamDir, { recursive: true });
+    fs.writeFileSync(
+      rootConfigPath,
+      JSON.stringify({
+        branching_strategy: 'phase',
+        git: { base_branch: 'main' },
+      }, null, 2),
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join(workstreamDir, 'config.json'),
+      JSON.stringify({ workflow: { tdd: true } }, null, 2),
+      'utf-8'
+    );
+
+    const triggerResult = runWithStderr(['resolve-model', 'planner'], tmpDir, {
+      GSD_WORKSTREAM: 'alpha',
+    });
+
+    assert.equal(
+      triggerResult.status,
+      0,
+      `workstream load command must succeed — exit status ${triggerResult.status}, stderr: ${triggerResult.stderr}`
+    );
+    assert.equal(
+      triggerResult.stderr.trim(),
+      '',
+      `No warning should fire while migrating root config for a workstream — got: ${triggerResult.stderr}`
+    );
+
+    const onDisk = JSON.parse(fs.readFileSync(rootConfigPath, 'utf-8'));
+    assert.equal(
+      onDisk.git?.branching_strategy,
+      'phase',
+      'Expected root config.json to persist git.branching_strategy after workstream load'
+    );
+    assert.equal(
+      onDisk.branching_strategy,
+      undefined,
+      'Expected root config.json to remove top-level branching_strategy after workstream load'
+    );
+
+    const rootResult = runWithStderr(['config-get', 'git.branching_strategy'], tmpDir);
+    assert.equal(
+      rootResult.status,
+      0,
+      `root config-get command must succeed after workstream migration — exit status ${rootResult.status}, stderr: ${rootResult.stderr}`
+    );
+    assert.ok(
+      rootResult.stdout.includes('phase'),
+      `Expected migrated root git.branching_strategy to be 'phase' but got: ${rootResult.stdout}`
+    );
+  });
 });
 
 // ─── Test 4: CJS↔SDK contract parity ────────────────────────────────────────
@@ -301,6 +365,11 @@ describe('bug-3523 — CJS↔SDK contract: both agree on legacy branching_strate
     // matching what the SDK's mergeDefaults would compute.
     const result = runWithStderr(['config-get', 'git.branching_strategy'], tmpDir);
 
+    assert.equal(
+      result.status,
+      0,
+      `config-get command must succeed — exit status ${result.status}, stderr: ${result.stderr}`
+    );
     assert.equal(
       result.stderr.trim(),
       '',

@@ -348,6 +348,14 @@ function loadConfig(cwd, options = {}) {
       const raw = platformReadSync(rootConfigPath);
       if (raw === null) throw new Error('missing');
       rootParsed = JSON.parse(raw);
+      if (Object.prototype.hasOwnProperty.call(rootParsed, 'branching_strategy')) {
+        if (!rootParsed.git) rootParsed.git = {};
+        if (rootParsed.git.branching_strategy === undefined) {
+          rootParsed.git.branching_strategy = rootParsed.branching_strategy;
+        }
+        delete rootParsed.branching_strategy;
+        try { platformWriteSync(rootConfigPath, JSON.stringify(rootParsed, null, 2)); } catch {}
+      }
     } catch {
       // Root config missing or unparseable — workstream config stands alone
     }
@@ -407,7 +415,7 @@ function loadConfig(cwd, options = {}) {
     // The nested value wins if already set (matches SDK mergeDefaults precedence, PR #3116).
     if (Object.prototype.hasOwnProperty.call(fileData, 'branching_strategy')) {
       if (!fileData.git) fileData.git = {};
-      if (!fileData.git.branching_strategy) {
+      if (fileData.git.branching_strategy === undefined) {
         fileData.git.branching_strategy = fileData.branching_strategy;
       }
       delete fileData.branching_strategy;
