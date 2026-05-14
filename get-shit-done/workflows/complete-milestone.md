@@ -724,9 +724,16 @@ fi
 
 <step name="git_tag">
 
+<config-check>
+Read `git.create_tag` via `gsd-sdk query config-get git.create_tag 2>/dev/null || echo "true"`.
+If the result is `false` → skip this step entirely and proceed to `git_commit_milestone`.
+</config-check>
+
 Create git tag:
 
 ```bash
+# Pre-check: skip if tag already exists (prevents silent failure on retry)
+if git rev-parse "v${milestone_version}" >/dev/null 2>&1; then echo "Tag v${milestone_version} already exists, skipping"; exit 0; fi
 git tag -a v[X.Y] -m "v[X.Y] [Name]
 
 Delivered: [One sentence]
