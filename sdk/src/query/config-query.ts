@@ -30,7 +30,10 @@ import {
   VALID_PROFILES,
   getAgentToModelMapForProfile,
   resolveRuntimeTierDefault,
+  runtimesWithReasoningEffort,
 } from '../model-catalog.js';
+
+const RUNTIMES_WITH_REASONING_EFFORT = runtimesWithReasoningEffort();
 
 // ─── configGet ──────────────────────────────────────────────────────────────
 
@@ -151,7 +154,11 @@ function resolveRuntimeTier(config: Record<string, unknown>, tier: string): Runt
   const userEntry = normalizeRuntimeTierEntry(runtimeOverrides?.[tier]);
 
   if (!builtin && !userEntry) return null;
-  return { ...(builtin ?? {}), ...(userEntry ?? {}) };
+  const merged = { ...(builtin ?? {}), ...(userEntry ?? {}) };
+  if (!RUNTIMES_WITH_REASONING_EFFORT.has(runtime)) {
+    delete merged.reasoning_effort;
+  }
+  return merged;
 }
 
 /**

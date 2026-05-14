@@ -2360,7 +2360,7 @@ Direct mapping:
   GSD embeds the resolved per-agent model directly into each agent's \`.toml\`
   at install time so \`model_overrides\` from \`.planning/config.json\` and
   \`~/.gsd/defaults.json\` are honored automatically by Codex's agent router.
-- Resolved \`reasoning_effort="low|medium|high|xhigh"\` → pass \`reasoning_effort\`
+- Resolved \`reasoning_effort="low|medium|high|xhigh"\` (\`xhigh\` is a GSD/Codex tier, not a generic runtime enum) → pass \`reasoning_effort\`
   to \`spawn_agent\` when the runtime/tool supports it. Omit missing, empty,
   inherited, or unsupported values; do not invent one-off effort literals in
   workflow prose.
