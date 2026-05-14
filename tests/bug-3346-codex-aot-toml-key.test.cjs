@@ -67,6 +67,8 @@ describe('#3346 — Codex AoT hooks migration emits event-name leaf key, not loc
       'handler command must be preserved through migration');
     assert.equal(handlers[0].type, 'command',
       'handler type must default to "command" when no explicit type given');
+    assert.equal(handlers[0].event, undefined,
+      'handler body must not retain legacy `event` field after migration');
   });
 
   test('legacy [hooks."<location>"] with explicit type and event survives migration cleanly', () => {
@@ -91,6 +93,8 @@ describe('#3346 — Codex AoT hooks migration emits event-name leaf key, not loc
     const handler = parsed.hooks.tool_call_pre[0].hooks[0];
     assert.equal(handler.command, 'node /path/to/hook.js');
     assert.equal(handler.type, 'command');
+    assert.equal(handler.event, undefined,
+      'handler body must not retain legacy `event` field after migration');
   });
 
   test('legacy [hooks.<bare-event>] without location-tuple key continues to work unchanged', () => {
