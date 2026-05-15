@@ -19,6 +19,9 @@ Canonical error kind set:
 - `validation_error`
 - `internal_error`
 
+### Sync Runtime Bridge Module
+SDK Module exposing `executeForCjs(input: RuntimeBridgeExecuteInput): RuntimeBridgeSyncResult` — a synchronous-friendly entry point on top of the async `QueryRuntimeBridge`. Enables the CJS dispatcher (`bin/gsd-tools.cjs` and per-family `*-command-router.cjs` files) to invoke SDK query handlers in-process — no subprocess hop — while preserving the synchronous contract that ~21 CJS test files and 100+ consumers depend on. Implementation uses `synckit` (Atomics.wait on a SharedArrayBuffer in a pooled Worker thread). First-call cost ~80ms (Worker startup + native bridge construction); steady-state ~0.1ms per call after the worker warms. Maps the async bridge's exceptions into a typed sync result `{ ok: true, data, exitCode: 0 } | { ok: false, exitCode, errorKind, errorDetails?, stderrLines }` aligned with the Dispatch Policy Module's error taxonomy from ADR-0001 (`unknown_command`, `native_failure`, `native_timeout`, `fallback_failure`, `validation_error`, `internal_error`). Subprocess fallback is disabled by design inside the sync bridge — unknown commands surface as `unknown_command` rather than spawning `gsd-sdk`. Source: `sdk/src/runtime-bridge-sync/index.ts` + `sdk/src/runtime-bridge-sync/worker.ts`.
+
 ### Command Definition Module
 Canonical command metadata Interface powering alias, catalog, and semantics generation.
 
@@ -47,7 +50,7 @@ Canonical command normalization and resolution Interface (`query-command-resolut
 Module owning command resolution, policy projection (`mutation`, `output_mode`), unknown-command diagnosis, and handler Adapter binding at one seam for query dispatch.
 
 ### CJS Command Router Adapter Module
-Compatibility Adapter Module for `gsd-tools.cjs` command families. Uses generated command metadata plus small argument shapers to route to CJS handlers, rather than calling SDK Command Topology directly. Preserves CJS compatibility startup while reducing hand-written router drift.
+Compatibility Adapter Module for `gsd-tools.cjs` command families. Uses generated command metadata plus small argument shapers to route to CJS handlers, rather than calling SDK Command Topology directly. Preserves CJS compatibility startup while reducing hand-written router drift. Per-family migration to call the **Sync Runtime Bridge Module**'s `executeForCjs` in-process — eliminating the remaining parallel CJS handler implementations — is the active work of #3524 Phase 5; the primitive itself ships in #3555, with each canonical command family (`state.*`, `verify.*`, `init.*`, `phase.*`, `phases.*`, `validate.*`, `roadmap.*`, `frontmatter.*`, `config.*`) routing through `executeForCjs` in its own follow-up enhancement.
 
 ### Query Pre-Project Config Policy Module
 Module policy that defines query-time behavior when `.planning/config.json` is absent: use built-in defaults for parity-sensitive query Interfaces, and emit parity-aligned empty model ids for pre-project model resolution surfaces.
