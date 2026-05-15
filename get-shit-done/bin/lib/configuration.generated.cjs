@@ -110,10 +110,11 @@ function normalizeLegacyKeys(parsed) {
     if (Object.prototype.hasOwnProperty.call(result, 'sub_repos')) {
         const value = result.sub_repos;
         const planning = result.planning ?? {};
-        if (!planning.sub_repos) {
+        if (planning.sub_repos === undefined) {
             result.planning = { ...planning, sub_repos: value };
         }
         else {
+            // canonical nested wins — just drop the stale top-level
             result.planning = { ...planning };
         }
         delete result.sub_repos;

@@ -216,6 +216,14 @@ describe('normalizeLegacyKeys', () => {
     // canonical nested wins
     expect((parsed as Record<string, Record<string, unknown>>).git?.branching_strategy).toBe('phase');
   });
+
+  it('preserves canonical planning.sub_repos when both top-level and nested exist', () => {
+    const input = { sub_repos: ['legacy'], planning: { sub_repos: null } };
+    const { parsed } = normalizeLegacyKeys(input);
+    expect((parsed as Record<string, Record<string, unknown>>).sub_repos).toBeUndefined();
+    // canonical nested wins even when explicit null is used to unset
+    expect((parsed as Record<string, Record<string, unknown>>).planning?.sub_repos).toBeNull();
+  });
 });
 
 // ─── mergeDefaults ───────────────────────────────────────────────────────────
