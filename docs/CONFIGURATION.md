@@ -1001,6 +1001,8 @@ The intent is the same as the Claude profile tiers -- use a stronger model for p
 
 When `runtime` is set, profile tiers (`opus`/`sonnet`/`haiku`) resolve to runtime-native model IDs instead of Claude aliases. This lets a single shared `.planning/config.json` work cleanly across Claude and Codex.
 
+`resolve-model` JSON output includes `reasoning_effort` when the runtime tier resolved for the agent (after phase-type overrides) defines a `reasoning_effort`. Runtime adapters may pass that value to child-agent launch calls that support it; runtimes without explicit support omit it.
+
 **Built-in tier maps:**
 
 | Runtime | `opus` | `sonnet` | `haiku` | reasoning_effort |
