@@ -637,7 +637,7 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" graphify status
 
 If the status response has `stale: true`, note for later: "Graph is {age_hours}h old -- treat semantic relationships as approximate." Include this annotation inline with any graph context injected below.
 
-**Auto-update awareness (issue #3347).** If `.planning/graphs/.last-build-status.json` exists, read it and surface the most recent auto-build state alongside the staleness note. The hook (`hooks/gsd-graphify-update.sh`, opt-in via `graphify.auto_update`) writes this file. Format the surfaced annotation based on `status`: `"running"` → "rebuild in flight (started {ts})"; `"failed"` → "auto-rebuild FAILED at {ts} (exit {exit_code}); context is from the prior build — run `/gsd:graphify build` manually to retry"; `"ok"` with `head_at_build` matching current `HEAD` → silent (graph is current); `"ok"` with `head_at_build` differing → "last rebuilt at {ts} for {head_at_build[:7]}; current HEAD has advanced". File missing → silent.
+If `.planning/graphs/.last-build-status.json` exists, also load @get-shit-done/references/planner-graphify-auto-update.md — it covers how to surface the most recent auto-build state (running / failed / stale `head_at_build`). Opt-in via `graphify.auto_update` (default false, #3347); silent if the file is absent.
 
 Query the graph for each major capability in the phase scope (2-3 queries per D-05, discovery-focused):
 
