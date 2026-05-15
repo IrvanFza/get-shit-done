@@ -829,7 +829,7 @@ function cmdGenerateDevPreferences(cwd, options, raw) {
 
   const result = {
     command_path: outputPath,
-    command_name: '/gsd-dev-preferences',
+    command_name: formatGsdSlash('dev-preferences', resolveRuntime(cwd)),
     dimensions_included: dimensionsIncluded,
     source: analysis.data_source || 'session_analysis',
   };

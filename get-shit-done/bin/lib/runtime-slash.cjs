@@ -30,14 +30,23 @@ function formatGsdSlash(commandName, runtime) {
   const bare = stripped === commandName ? commandName : stripped;
   if (bare === '') return commandName;
 
+  // Split on the first whitespace so only the command token is rewritten —
+  // anything after the first space is caller-supplied arguments (phase
+  // numbers, --flags, --paths C:\\Users\\Me, etc.) that must round-trip
+  // untouched. Codex lowercases only the command token; preserving the
+  // argument tail prevents path/flag corruption on case-sensitive systems.
+  const wsMatch = bare.match(/^(\S+)(\s[\s\S]*)?$/);
+  const token = wsMatch ? wsMatch[1] : bare;
+  const tail = wsMatch && wsMatch[2] ? wsMatch[2] : '';
+
   const rt = String(runtime || 'claude').toLowerCase();
   if (rt === 'codex') {
-    // Codex skills are invoked as $gsd-<cmd> (shell-var syntax). Lowercased
-    // because shell-var identifiers in the surrounding prose are conventionally
+    // Codex skills are invoked as $gsd-<cmd> (shell-var syntax). The command
+    // token is lowercased because shell-var identifiers are conventionally
     // lowercase; matches the convertCodexSlash() projection in bin/install.js.
-    return `$gsd-${bare.toLowerCase()}`;
+    return `$gsd-${token.toLowerCase()}${tail}`;
   }
-  return `/gsd-${bare}`;
+  return `/gsd-${token}${tail}`;
 }
 
 /**

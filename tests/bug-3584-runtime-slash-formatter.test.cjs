@@ -148,6 +148,29 @@ describe('formatGsdSlash — runtime-aware slash command formatter', () => {
         '/gsd-execute-phase 03',
       );
     });
+
+    test('codex form lowercases only the command token, not the argument tail', () => {
+      // Regression for codex review finding: a previous implementation
+      // lowercased the full input including arguments, which would corrupt
+      // Windows paths and case-sensitive flag values passed as args.
+      assert.strictEqual(
+        formatGsdSlash('Map-Codebase --paths C:\\Users\\Me\\Project', 'codex'),
+        '$gsd-map-codebase --paths C:\\Users\\Me\\Project',
+      );
+      assert.strictEqual(
+        formatGsdSlash('execute-phase 03 --Name FooBar', 'codex'),
+        '$gsd-execute-phase 03 --Name FooBar',
+      );
+    });
+
+    test('hyphen form preserves token case (it does not get lowercased)', () => {
+      // Symmetry with codex: only codex lowercases the token. Hyphen-form
+      // runtimes preserve whatever case the caller supplied for the token.
+      assert.strictEqual(
+        formatGsdSlash('Plan-Phase 03', 'claude'),
+        '/gsd-Plan-Phase 03',
+      );
+    });
   });
 });
 

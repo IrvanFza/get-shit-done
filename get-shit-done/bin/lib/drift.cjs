@@ -190,7 +190,7 @@ function detectDrift(input) {
       if (action === 'auto-remap') {
         spawnMapper = true;
       }
-      message = buildMessage(elements, affectedPaths, action);
+      message = buildMessage(elements, affectedPaths, action, input.projectDir);
     }
 
     return {
@@ -228,7 +228,7 @@ function skipped(reason) {
   };
 }
 
-function buildMessage(elements, affectedPaths, action) {
+function buildMessage(elements, affectedPaths, action, projectDir) {
   const byCat = {};
   for (const e of elements) {
     (byCat[e.category] ||= []).push(e.path);
@@ -254,7 +254,7 @@ function buildMessage(elements, affectedPaths, action) {
     lines.push(`Auto-remap scheduled for paths: ${affectedPaths.join(', ')}`);
   } else {
     const { formatGsdSlash, resolveRuntime } = require('./runtime-slash.cjs');
-    const mapCmd = formatGsdSlash('map-codebase', resolveRuntime(null));
+    const mapCmd = formatGsdSlash('map-codebase', resolveRuntime(projectDir));
     lines.push(
       `Run ${mapCmd} --paths ${affectedPaths.join(',')} to refresh planning context.`,
     );

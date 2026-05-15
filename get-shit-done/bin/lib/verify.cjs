@@ -1358,6 +1358,7 @@ function cmdVerifyCodebaseDrift(cwd, raw) {
       structureMd,
       threshold,
       action,
+      projectDir: cwd,
     });
 
     emit({

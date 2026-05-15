@@ -260,7 +260,7 @@ describe('bug-3584: validate context recommendation uses hyphen form', () => {
 });
 
 describe('bug-3584: validate health uses formatter for codex runtime too', () => {
-  test('validate health under codex emits $gsd-<cmd> in fix strings', (t) => {
+  test('validate health under codex emits $gsd-<cmd> in fix strings (positive assertion)', (t) => {
     const tmpDir = createTempDir();
     t.after(() => cleanup(tmpDir));
 
@@ -281,20 +281,30 @@ describe('bug-3584: validate health uses formatter for codex runtime too', () =>
       .concat(payload.warnings || [])
       .concat(payload.info || []);
 
-    const fixesWithSlash = allIssues
+    // Collect fixes that mention any gsd slash-command form so we can lock
+    // both the absence of legacy forms AND the presence of the codex shape.
+    const fixesWithGsdRef = allIssues
       .map((i) => i.fix)
-      .filter((f) => typeof f === 'string' && /gsd-/.test(f));
+      .filter((f) => typeof f === 'string' && /(?:\$|\/)gsd[-:]/.test(f));
 
-    // For codex, hyphen-with-slash form `/gsd-<cmd>` should be replaced by
-    // shell-var `$gsd-<cmd>`. Skip the assertion if no relevant fix was
-    // produced (test only asserts the contract when something is emitted).
-    for (const fix of fixesWithSlash) {
+    assert.ok(
+      fixesWithGsdRef.length > 0,
+      'validate health on a bare tmpdir must produce at least one fix hint referencing a gsd command',
+    );
+
+    for (const fix of fixesWithGsdRef) {
+      assert.ok(
+        fix.includes('$gsd-'),
+        `codex validate health fix must use shell-var $gsd- form, got ${JSON.stringify(fix)}`,
+      );
       assert.ok(
         !fix.includes('/gsd:'),
         `codex validate health fix must not contain /gsd: colon form, got ${JSON.stringify(fix)}`,
       );
-      // Codex emits $gsd- — any /gsd- in the fix means the formatter wasn't applied.
-      // (We don't have a hard count guarantee — a fix can also reference a plain url etc.)
+      assert.ok(
+        !fix.includes('/gsd-'),
+        `codex validate health fix must not contain /gsd- (skills) form, got ${JSON.stringify(fix)}`,
+      );
     }
   });
 });
