@@ -41,7 +41,16 @@ export interface DynamicKeyPattern {
 }
 
 export const DYNAMIC_KEY_PATTERNS: readonly DynamicKeyPattern[] = _schemaManifest.dynamicKeyPatterns.map(
-  (p) => ({ ...p, test: (key: string) => new RegExp(p.source).test(key) }),
+  (p) => {
+    const pattern = new RegExp(p.source);
+    return {
+      ...p,
+      test: (key: string) => {
+        pattern.lastIndex = 0;
+        return pattern.test(key);
+      },
+    };
+  },
 );
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -305,6 +314,11 @@ export async function migrateOnDisk(cwd: string, workstream?: string): Promise<M
     }
   }
 
-  writeFileSync(configPath, JSON.stringify(result, null, 2));
+  try {
+    writeFileSync(configPath, JSON.stringify(result, null, 2));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to write migrated config at ${configPath}: ${msg}`);
+  }
   return { migrated: true, normalizations, wrote: configPath };
 }

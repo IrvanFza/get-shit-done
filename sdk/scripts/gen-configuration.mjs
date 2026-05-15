@@ -12,7 +12,7 @@
  * Or from repo root: node sdk/scripts/gen-configuration.mjs
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
@@ -21,10 +21,13 @@ const repoRoot = resolve(here, '..', '..');
 
 // ─── Read the compiled dist file for function extraction ─────────────────────
 
-const distSrc = readFileSync(
-  resolve(here, '..', 'dist', 'configuration', 'index.js'),
-  'utf-8',
-);
+const distPath = resolve(here, '..', 'dist', 'configuration', 'index.js');
+if (!existsSync(distPath)) {
+  throw new Error(
+    `Missing compiled configuration module at ${distPath}. Run "cd sdk && npm run build" first.`,
+  );
+}
+const distSrc = readFileSync(distPath, 'utf-8');
 
 /**
  * Extract a named function from the compiled dist source by scanning for
@@ -102,7 +105,16 @@ export function buildConfigurationCjs() {
     `const SCHEMA_MANIFEST = require('../../../sdk/shared/config-schema.manifest.json');`,
     `const VALID_CONFIG_KEYS = new Set(SCHEMA_MANIFEST.validKeys);`,
     `const RUNTIME_STATE_KEYS = new Set(SCHEMA_MANIFEST.runtimeStateKeys);`,
-    `const DYNAMIC_KEY_PATTERNS = SCHEMA_MANIFEST.dynamicKeyPatterns.map(p => ({ ...p, test: (key) => new RegExp(p.source).test(key) }));`,
+    `const DYNAMIC_KEY_PATTERNS = SCHEMA_MANIFEST.dynamicKeyPatterns.map((p) => {`,
+    `  const pattern = new RegExp(p.source);`,
+    `  return {`,
+    `    ...p,`,
+    `    test: (key) => {`,
+    `      pattern.lastIndex = 0;`,
+    `      return pattern.test(key);`,
+    `    },`,
+    `  };`,
+    `});`,
     ``,
     `// ─── Depth → Granularity mapping ─────────────────────────────────────────────`,
     dtgConst,

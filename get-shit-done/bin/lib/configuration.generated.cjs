@@ -21,7 +21,16 @@ const CONFIG_DEFAULTS = require('../../../sdk/shared/config-defaults.manifest.js
 const SCHEMA_MANIFEST = require('../../../sdk/shared/config-schema.manifest.json');
 const VALID_CONFIG_KEYS = new Set(SCHEMA_MANIFEST.validKeys);
 const RUNTIME_STATE_KEYS = new Set(SCHEMA_MANIFEST.runtimeStateKeys);
-const DYNAMIC_KEY_PATTERNS = SCHEMA_MANIFEST.dynamicKeyPatterns.map(p => ({ ...p, test: (key) => new RegExp(p.source).test(key) }));
+const DYNAMIC_KEY_PATTERNS = SCHEMA_MANIFEST.dynamicKeyPatterns.map((p) => {
+  const pattern = new RegExp(p.source);
+  return {
+    ...p,
+    test: (key) => {
+      pattern.lastIndex = 0;
+      return pattern.test(key);
+    },
+  };
+});
 
 // ─── Depth → Granularity mapping ─────────────────────────────────────────────
 const DEPTH_TO_GRANULARITY = {
@@ -201,7 +210,13 @@ async function migrateOnDisk(cwd, workstream) {
             }
         }
     }
-    writeFileSync(configPath, JSON.stringify(result, null, 2));
+    try {
+        writeFileSync(configPath, JSON.stringify(result, null, 2));
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to write migrated config at ${configPath}: ${msg}`);
+    }
     return { migrated: true, normalizations, wrote: configPath };
 }
 
