@@ -4,9 +4,8 @@
  * Covers:
  * - Success path: known read-only command returns { ok: true, data, exitCode: 0 }
  * - unknown_command: unknown command key returns { ok: false, errorKind: 'unknown_command' }
- * - validation_error: invalid args to known command returns { ok: false, errorKind: 'validation_error' }
  * - native_failure: handler that throws a generic Error returns { ok: false, errorKind: 'native_failure' }
- * - internal_error: handler that throws TypeError returns { ok: false, errorKind: 'internal_error' }
+ * - internal_error mapping tracked as a TODO until a deterministic TypeError fixture exists
  * - Idempotency: calling twice with identical input produces identical output
  * - Sync nature: returned value is not a Promise
  */
