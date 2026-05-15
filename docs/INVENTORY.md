@@ -434,7 +434,7 @@ Full listing: `get-shit-done/bin/lib/*.cjs`.
 
 ---
 
-## Hooks (12 shipped)
+## Hooks (13 shipped)
 
 Full listing: `hooks/`.
 
@@ -452,6 +452,7 @@ Full listing: `hooks/`.
 | `gsd-session-state.sh` | `PostToolUse` | Session-state tracking for shell-based runtimes |
 | `gsd-validate-commit.sh` | `PostToolUse` | Commit validation for conventional-commit enforcement |
 | `gsd-phase-boundary.sh` | `PostToolUse` | Phase-boundary detection for workflow transitions |
+| `gsd-graphify-update.sh` | `PostToolUse` | Auto-rebuild knowledge graph after main HEAD advances (opt-in, default off — #3347) |
 
 ---
 

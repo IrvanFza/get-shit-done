@@ -51,6 +51,7 @@ Parse current values (default to `true` if not present):
 - `commit_docs` — whether `.planning/` files are committed to git (default: true if absent)
 - `intel.enabled` — enable queryable codebase intelligence (/gsd:map-codebase --query) (default: false if absent)
 - `graphify.enabled` — enable project knowledge graph (/gsd:graphify) (default: false if absent)
+- `graphify.auto_update` — opt-in: auto-rebuild graph after main HEAD advances (#3347) (default: `false`)
 - `model_profile` — which model each agent uses (default: `balanced`)
 - `git.branching_strategy` — branching approach (default: `"none"`)
 - `workflow.use_worktrees` — whether parallel executor agents run in worktree isolation (default: `true`)
@@ -317,6 +318,15 @@ AskUserQuestion([
       { label: "No (Recommended)", description: "Skip knowledge graph. Use when dependency graphs are not needed." },
       { label: "Yes", description: "Enable /gsd:graphify commands. Builds and queries a project knowledge graph." }
     ]
+  },
+  {
+    question: "Auto-rebuild graph after main HEAD advances? (only effective if Graphify is enabled — #3347)",
+    header: "Graph auto-update",
+    multiSelect: false,
+    options: [
+      { label: "No (Recommended)", description: "Manual /gsd:graphify build only. Conservative default — opt in if you want fresh context on every /gsd:quick or /gsd:plan-phase." },
+      { label: "Yes", description: "Auto-rebuild the graph in a detached background process after git commit/merge/pull/rebase --continue/cherry-pick on the default branch. Hook returns instantly; rebuild runs out-of-band. No-op if Graphify is disabled." }
+    ]
   }
 ])
 ```
@@ -354,7 +364,8 @@ Merge new settings into existing config.json:
     "enabled": true/false
   },
   "graphify": {
-    "enabled": true/false
+    "enabled": true/false,
+    "auto_update": true/false
   },
   "git": {
     "branching_strategy": "none" | "phase" | "milestone",

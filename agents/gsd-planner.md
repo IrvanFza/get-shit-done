@@ -892,6 +892,22 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" graphify status
 
 If the status response has `stale: true`, note for later: "Graph is {age_hours}h old -- treat semantic relationships as approximate." Include this annotation inline with any graph context injected below.
 
+**Auto-update awareness (issue #3347).** If `.planning/graphs/.last-build-status.json` exists, read it and surface the most recent auto-build state alongside the staleness note. The hook (`hooks/gsd-graphify-update.sh`, opt-in via `graphify.auto_update`) writes this file. Format the surfaced annotation based on `status`:
+
+- `status: "running"` — "Graph auto-rebuild in flight (started {ts}); treat semantic relationships as approximate until rebuild completes."
+- `status: "failed"` — "Graph auto-rebuild FAILED at {ts} (exit {exit_code}); the planning context below is from the prior build. Run `/gsd:graphify build` to retry manually."
+- `status: "ok"` with `head_at_build` matching the current `HEAD` — silent (graph is current).
+- `status: "ok"` with `head_at_build` differing from current `HEAD` — "Graph last rebuilt at {ts} for commit {head_at_build[:7]}; current HEAD has advanced -- treat semantic relationships as approximate."
+- File missing — silent; rely on the existing staleness note above.
+
+Read the status file with:
+
+```bash
+test -f .planning/graphs/.last-build-status.json && cat .planning/graphs/.last-build-status.json
+```
+
+The auto-update mechanism is opt-in (`graphify.auto_update: false` by default per #3347); users who do not opt in will never see this file and the annotation above is a no-op.
+
 Query the graph for phase-relevant dependency context (single query per D-06):
 
 ```bash
