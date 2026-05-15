@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.84",
+    "synckit": "^0.11.12",
     "ws": "^8.20.0"
   },
   "devDependencies": {
