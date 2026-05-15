@@ -598,6 +598,13 @@ export const validateHealth: QueryHandler = async (args, projectDir, workstream)
       while ((m = phasePattern.exec(roadmapContent)) !== null) {
         roadmapPhases.add(m[1]);
       }
+      const notStartedPhases = new Set<string>();
+      const uncheckedPattern = /-\s*\[\s\]\s*\*{0,2}Phase\s+(\d+[A-Z]?(?:\.\d+)*)[:\s*]/gi;
+      let um: RegExpExecArray | null;
+      while ((um = uncheckedPattern.exec(roadmapContent)) !== null) {
+        notStartedPhases.add(um[1]);
+        notStartedPhases.add(String(parseInt(um[1], 10)).padStart(2, '0'));
+      }
 
       const diskPhases = new Set<string>();
       try {
@@ -627,6 +634,7 @@ export const validateHealth: QueryHandler = async (args, projectDir, workstream)
       for (const p of roadmapPhases) {
         const padded = String(parseInt(p, 10)).padStart(2, '0');
         if (!diskPhases.has(p) && !diskPhases.has(padded)) {
+          if (notStartedPhases.has(p) || notStartedPhases.has(padded)) continue;
           addIssue('warning', 'W006', `Phase ${p} in ROADMAP.md but no directory on disk`, 'Create phase directory or remove from roadmap');
         }
       }
