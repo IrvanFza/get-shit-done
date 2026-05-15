@@ -4444,14 +4444,14 @@ function rewriteTomlKeyLines(content, matches, key) {
       const blockEol = blockEnd > 0 && content[blockEnd - 1] === '\n'
         ? (blockEnd > 1 && content[blockEnd - 2] === '\r' ? '\r\n' : '\n')
         : '';
-      // Always rewrite to the caller-supplied canonical `key`, ignoring
-      // `match.keyRaw`. The previous `match.keyRaw || key` fallback
-      // silently preserved legacy aliases (issue #3566): callers asking
-      // to rewrite a section line to `hooks` would get back the original
-      // `codex_hooks` line unchanged because the parsed record carried
-      // `keyRaw: "codex_hooks"`. The caller's intent — emit the canonical
-      // key — must win.
-      rewritten += normalizeCodexHooksLine(match.text, key) + blockEol;
+      // Preserve the existing key when one is present on the line
+      // (`match.keyRaw`). This respects user ownership: a user-authored
+      // `codex_hooks = true` line stays as `codex_hooks = true` even
+      // though `hooks` is the canonical key in current Codex (#3566).
+      // Codex's own `legacy_key` alias mechanism in codex-rs handles the
+      // backward compat at the runtime layer. Migration to canonical is
+      // a fresh-insert-only operation in ensureCodexHooksFeature.
+      rewritten += normalizeCodexHooksLine(match.text, match.keyRaw || key) + blockEol;
       cursor = blockEnd;
       return;
     }

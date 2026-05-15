@@ -109,7 +109,10 @@ describe('#3566 — Codex feature flag is canonical "hooks" (not legacy "codex_h
     );
   });
 
-  test('reinstall over section-form legacy [features].codex_hooks migrates to [features].hooks', () => {
+  test('install over a pre-existing legacy [features].codex_hooks line preserves it (user-owned, #2760 defensive)', () => {
+    // A user who hand-wrote `codex_hooks = true` keeps the legacy key.
+    // Codex itself maps it via the runtime legacy_key alias, so this is
+    // forward-compatible without GSD rewriting user-authored content.
     const legacy = [
       '[features]',
       'codex_hooks = true',
@@ -121,18 +124,13 @@ describe('#3566 — Codex feature flag is canonical "hooks" (not legacy "codex_h
     const { parsed } = readConfig(codexHome);
 
     assert.strictEqual(
-      featuresHooks(parsed),
-      true,
-      'reinstall must rewrite legacy section-form codex_hooks to canonical hooks',
-    );
-    assert.strictEqual(
       featuresCodexHooks(parsed),
-      undefined,
-      'legacy [features].codex_hooks must be removed during migration',
+      true,
+      'user-owned legacy codex_hooks line must be preserved verbatim',
     );
   });
 
-  test('reinstall over root-dotted legacy features.codex_hooks migrates to features.hooks', () => {
+  test('install over a pre-existing legacy root-dotted features.codex_hooks line preserves it', () => {
     const legacy = 'features.codex_hooks = true\n';
     fs.writeFileSync(path.join(codexHome, 'config.toml'), legacy);
 
@@ -140,14 +138,9 @@ describe('#3566 — Codex feature flag is canonical "hooks" (not legacy "codex_h
     const { parsed } = readConfig(codexHome);
 
     assert.strictEqual(
-      featuresHooks(parsed),
-      true,
-      'reinstall must rewrite legacy root-dotted features.codex_hooks to features.hooks',
-    );
-    assert.strictEqual(
       featuresCodexHooks(parsed),
-      undefined,
-      'root-dotted legacy must be removed during migration',
+      true,
+      'user-owned root-dotted legacy line must be preserved verbatim',
     );
   });
 
