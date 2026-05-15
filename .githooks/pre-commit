@@ -8,3 +8,7 @@ fi
 if git diff --cached --name-only | grep -Eq "^sdk/src/query/state-document\.|^get-shit-done/bin/lib/state-document\.generated\.cjs$|^sdk/scripts/gen-state-document\.ts$|^sdk/scripts/check-state-document-fresh\.mjs$"; then
   npm run check:state-document-fresh
 fi
+
+if git diff --cached --name-only | grep -Eq "^sdk/src/configuration/|^sdk/shared/config-(defaults|schema)\.manifest\.json$|^get-shit-done/bin/lib/configuration\.generated\.cjs$|^sdk/scripts/gen-configuration\.mjs$"; then
+  npm run check:configuration-fresh
+fi

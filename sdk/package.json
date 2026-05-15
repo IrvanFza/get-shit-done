@@ -38,6 +38,8 @@
     "check:alias-drift": "npm run build && node scripts/check-command-aliases-fresh.mjs",
     "gen:state-document": "npm run build && npx tsx scripts/gen-state-document.ts",
     "check:state-document-fresh": "npm run build && node scripts/check-state-document-fresh.mjs",
+    "gen:configuration": "npm run build && node scripts/gen-configuration.mjs",
+    "check:configuration-fresh": "npm run build && node scripts/check-configuration-fresh.mjs",
     "prepublishOnly": "rm -rf dist && tsc && chmod +x dist/cli.js",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
