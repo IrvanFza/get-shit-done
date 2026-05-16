@@ -20,9 +20,8 @@ const SDK_SHARED_DIR = path.join(REPO_ROOT, 'sdk', 'shared');
 
 const { install } = require('../bin/install.js');
 
-function makeTmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-3571-'));
-}
+const { createTempDir } = require('./helpers.cjs');
+const makeTmpDir = () => createTempDir('gsd-3571-');
 
 function silenceConsole(fn) {
   const original = {

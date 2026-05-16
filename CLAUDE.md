@@ -19,3 +19,11 @@ Custom label mapping: `confirmed` = AFK-agent-ready (bugs); `approved-enhancemen
 ### Domain docs
 
 Single-context repo — `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+## Memory
+
+This project uses MemPalace. At the start of every session, call
+`mempalace_status` to load the palace protocol. Before answering
+questions about people, past work, or prior decisions in this
+project, call `mempalace_search` or `mempalace_kg_query` first —
+do not guess from context alone.

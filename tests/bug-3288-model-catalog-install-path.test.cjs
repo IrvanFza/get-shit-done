@@ -39,13 +39,10 @@ const { install } = require('../bin/install.js');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function makeTmpDir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
+const { createTempDir, cleanup } = require('./helpers.cjs');
+const makeTmpDir = createTempDir;
 
-function rmTmpDir(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
-}
+const rmTmpDir = cleanup;
 
 /**
  * Silence console output during install to avoid noise in test output.

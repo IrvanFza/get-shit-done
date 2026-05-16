@@ -42,11 +42,9 @@ const WORKFLOW_PATH = path.join(
 // ─── Helper: create outer git repo with a nested workstream subdir ─────────
 
 // On Windows the runtime emits forward slashes (git's convention) while
-// path.join produces backslashes — normalize both sides before any
-// equality comparison against the handler's git_worktree_root.
-function normalizePath(p) {
-  return p == null ? p : p.split(path.sep).join('/');
-}
+// path.join produces backslashes — normalize both sides via the shared
+// toPosixPath helper before any equality comparison.
+const { toPosixPath: normalizePath } = require('./helpers.cjs');
 
 function createOuterRepoWithSubdir(prefix = 'bug-3491-') {
   const outer = fs.mkdtempSync(path.join(os.tmpdir(), prefix));

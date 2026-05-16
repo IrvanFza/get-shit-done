@@ -48,9 +48,8 @@ const {
  * Create a fresh real-fs scratch dir per test so no two faults share
  * state. Returns the directory; caller must clean up.
  */
-function mkScratch(name) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `fs-fault-${name}-`));
-}
+const { createTempDir } = require('./helpers.cjs');
+const mkScratch = (name) => createTempDir(`fs-fault-${name}-`);
 
 /**
  * Enumerate orphan tmp files left behind by platformWriteSync. The

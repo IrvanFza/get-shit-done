@@ -28,9 +28,8 @@ const {
   getCodexSkillAdapterHeader,
 } = require('../bin/install.js');
 
-function makeTmp(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), `gsd-2256-${prefix}-`));
-}
+const { createTempDir } = require('./helpers.cjs');
+const makeTmp = (prefix) => createTempDir(`gsd-2256-${prefix}-`);
 
 function writeJson(p, obj) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
