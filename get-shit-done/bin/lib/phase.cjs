@@ -226,7 +226,7 @@ function getRoadmapModeForPhase(cwd, phaseNum) {
 
     const sectionStart = headerMatch.index;
     const rest = content.slice(sectionStart);
-    const nextHeader = rest.slice(headerMatch[0].length).match(/\n#{2,4}\s+Phase\s+\d/i);
+    const nextHeader = rest.slice(headerMatch[0].length).match(/\n#{2,4}\s+Phase\s+\S/i);
     const sectionEnd = nextHeader ? sectionStart + headerMatch[0].length + nextHeader.index : content.length;
     const section = content.slice(sectionStart, sectionEnd);
     const modeMatch = section.match(/\*\*Mode(?::\*\*|\*\*:)\s*([^\n]+)/i);

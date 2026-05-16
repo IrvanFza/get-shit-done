@@ -10,6 +10,7 @@
 
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('path');
@@ -141,6 +142,8 @@ function runGsdTools(args, projectDir) {
   return spawnSync(process.execPath, [GSD_TOOLS, ...args], {
     cwd: projectDir,
     encoding: 'utf8',
+    timeout: 30000,
+    killSignal: 'SIGKILL',
   });
 }
 
@@ -152,11 +155,16 @@ function listProjectFiles(projectDir) {
       const full = path.join(dir, entry.name);
       const rel = path.relative(projectDir, full);
       if (entry.isDirectory()) walk(full);
-      else files.push(rel);
+      else {
+        files.push({
+          path: rel,
+          sha256: crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex'),
+        });
+      }
     }
   }
   walk(projectDir);
-  return files.sort();
+  return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 describe('feat-3251: generated aliases dispatch through real gsd-tools behavior', () => {
@@ -206,6 +214,40 @@ describe('feat-3251: generated aliases dispatch through real gsd-tools behavior'
       assert.equal(output.roadmap_mode, 'mvp');
       assert.equal(output.config_mvp_mode, false);
       assert.equal(output.cli_flag_present, false);
+      assert.deepEqual(listProjectFiles(projectDir), beforeFiles);
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  test('phase.mvp-mode ROADMAP lookup stops before custom-id next phase', () => {
+    const projectDir = createProject();
+    try {
+      fs.writeFileSync(
+        path.join(projectDir, '.planning', 'ROADMAP.md'),
+        [
+          '# Roadmap',
+          '',
+          '## v1.0.0',
+          '',
+          '### Phase 1: Numeric Phase',
+          '**Goal:** Users can sign in.',
+          '',
+          '### Phase custom-alpha: Custom Phase',
+          '**Goal:** Custom work.',
+          '**Mode:** mvp',
+          '',
+        ].join('\n'),
+      );
+      const beforeFiles = listProjectFiles(projectDir);
+
+      const result = runGsdTools(['phase', 'mvp-mode', '1'], projectDir);
+      assert.equal(result.status, 0, result.stderr);
+
+      const output = JSON.parse(result.stdout);
+      assert.equal(output.active, false);
+      assert.equal(output.source, 'none');
+      assert.equal(output.roadmap_mode, null);
       assert.deepEqual(listProjectFiles(projectDir), beforeFiles);
     } finally {
       fs.rmSync(projectDir, { recursive: true, force: true });
