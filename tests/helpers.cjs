@@ -104,12 +104,19 @@ function createTempGitProject(prefix = 'gsd-test-') {
 }
 
 function cleanup(tmpDir) {
+  if (typeof tmpDir !== 'string' || tmpDir.length === 0) return;
+  const target = path.resolve(tmpDir);
+  const cwd = path.resolve(process.cwd());
+  if (cwd === target || cwd.startsWith(`${target}${path.sep}`)) {
+    // Windows cannot remove a directory that is the current working directory.
+    process.chdir(path.dirname(target));
+  }
   // maxRetries/retryDelay absorbs transient Windows EBUSY where AV scanners,
   // file-indexers, or just-exited child processes still hold handles when
   // teardown runs. On POSIX the retry loop is a no-op (rmSync succeeds first try).
   // Budget: 20 × 250ms = 5s total — Windows Defender's deferred scan can hold
   // newly-written files for several seconds on cold runners.
-  fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  fs.rmSync(target, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
 
 /**
