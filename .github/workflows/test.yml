@@ -127,6 +127,36 @@ jobs:
         shell: bash
         run: node sdk/scripts/check-project-root-fresh.mjs
 
+      - name: SDK generated plan-scan artifact drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node sdk/scripts/check-plan-scan-fresh.mjs
+
+      - name: SDK generated secrets artifact drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node sdk/scripts/check-secrets-fresh.mjs
+
+      - name: SDK generated schema-detect artifact drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node sdk/scripts/check-schema-detect-fresh.mjs
+
+      - name: SDK generated decisions artifact drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node sdk/scripts/check-decisions-fresh.mjs
+
+      - name: SDK generated workstream-name-policy artifact drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node sdk/scripts/check-workstream-name-policy-fresh.mjs
+
+      - name: Shared Module hand-sync drift check
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        shell: bash
+        run: node scripts/lint-shared-module-handsync.cjs
+
       # Split lanes (issue #3597). Unit is the fast default lane; integration
       # and security run alongside it on every PR. `install` and `slow` are
       # skipped on PR CI by design — they run on the weekly windows-compat
@@ -157,6 +187,7 @@ jobs:
   # Dedicated coverage job. Runs only on ubuntu/Node 24 (the canonical lane)
   # because c8 coverage of one suite on one OS is enough signal — running it
   # across the full matrix would 9x the cost for no extra coverage data.
+  # Replaces main's per-matrix `Run tests with coverage` step.
   coverage:
     runs-on: ubuntu-latest
     timeout-minutes: 15

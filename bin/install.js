@@ -20,6 +20,15 @@ const {
   projectCodexHookTomlCommand,
 } = require('../get-shit-done/bin/lib/shell-command-projection.cjs');
 
+// Bidirectional GSD slash-command namespace transformer (#3583).
+// Required at module scope so the command list can be computed once per install
+// and passed down to convertClaudeCommandToClaudeSkill, avoiding repeated
+// fs.readdirSync + RegExp work for every skill.
+const {
+  transformContentToHyphen,
+  readCmdNames: readGsdCommandNames,
+} = require(path.join(__dirname, '..', 'scripts', 'fix-slash-commands.cjs'));
+
 // Colors
 const cyan = '\x1b[36m';
 const green = '\x1b[32m';
@@ -49,6 +58,10 @@ function isCodexHooksFeatureKey(key) {
 // Copilot instructions marker constants
 const GSD_COPILOT_INSTRUCTIONS_MARKER = '<!-- GSD Configuration \u2014 managed by get-shit-done installer -->';
 const GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER = '<!-- /GSD Configuration -->';
+
+// GSD-managed files under hooks/lib/ (helpers required by gsd-*.sh hooks).
+// git-cmd.js does not start with "gsd-" (shared classifier for #3129), gsd-graphify-rebuild.sh does.
+const GSD_HOOK_LIB_FILES = ['git-cmd.js', 'gsd-graphify-rebuild.sh'];
 
 const CODEX_AGENT_SANDBOX = {
   'gsd-executor': 'workspace-write',
@@ -1665,9 +1678,17 @@ function skillFrontmatterName(skillDirName) {
  * Emits `name: gsd-<cmd>` (hyphen) so Skill(skill="gsd-<cmd>") calls and
  * tab autocomplete use the canonical command namespace.
  */
-function convertClaudeCommandToClaudeSkill(content, skillName, runtime = null) {
+function convertClaudeCommandToClaudeSkill(content, skillName, runtime = null, cmdNames = null) {
   const { frontmatter, body } = extractFrontmatterAndBody(content);
   if (!frontmatter) return content;
+
+  // #3583: rewrite any /gsd:<cmd> or gsd:<cmd> in the body to the canonical
+  // hyphen form (gsd-<cmd>) so installed SKILL.md bodies match the hyphen
+  // `name:` Claude Code (and Qwen/Hermes) register under (#2808). `cmdNames`
+  // is optional and pre-computed by the caller for performance; direct test
+  // calls fall back to reading the list.
+  const names = cmdNames || readGsdCommandNames();
+  const normalizedBody = transformContentToHyphen(body, names);
 
   const description = extractFrontmatterField(frontmatter, 'description') || '';
   const argumentHint = extractFrontmatterField(frontmatter, 'argument-hint');
@@ -1694,7 +1715,7 @@ function convertClaudeCommandToClaudeSkill(content, skillName, runtime = null) {
   if (toolsBlock) fm += toolsBlock;
   fm += '---';
 
-  return `${fm}\n${body}`;
+  return `${fm}\n${normalizedBody}`;
 }
 
 /**
@@ -5895,6 +5916,11 @@ function copyCommandsAsClaudeSkills(srcDir, skillsDir, prefix, pathPrefix, runti
 
   fs.mkdirSync(skillsDir, { recursive: true });
 
+  // Live command names for the colon→hyphen body transform (#3583), computed
+  // once per install instead of inside convertClaudeCommandToClaudeSkill where
+  // it would re-scan commands/gsd for every skill.
+  const cmdNames = readGsdCommandNames();
+
   // #2973 (CR follow-up on #3003): preserve user-generated skills across the
   // wipe-and-replace. `gsd-dev-preferences/SKILL.md` is written by the user
   // via `/gsd-profile-user --refresh`; it is NOT shipped by the npm package,
@@ -5985,7 +6011,7 @@ function copyCommandsAsClaudeSkills(srcDir, skillsDir, prefix, pathPrefix, runti
         content = content.replace(/\.claude\//g, '.hermes/');
       }
       content = processAttribution(content, getCommitAttribution(runtime));
-      content = convertClaudeCommandToClaudeSkill(content, skillName, runtime);
+      content = convertClaudeCommandToClaudeSkill(content, skillName, runtime, cmdNames);
 
       fs.writeFileSync(path.join(skillDir, 'SKILL.md'), content);
     }
@@ -6867,6 +6893,33 @@ function uninstall(isGlobal, runtime = 'claude') {
       removedCount++;
       console.log(`  ${green}✓${reset} Removed ${hookCount} GSD hooks`);
     }
+
+    // Remove only the GSD-managed files from hooks/lib/ (git-cmd.js + gsd-graphify-rebuild.sh).
+    // hooks/lib/ lives inside the user's runtime hooks directory (shared space) and
+    // may contain user-owned custom helpers. We must not recursively delete the dir.
+    const hooksLibDir = path.join(hooksDir, 'lib');
+    if (fs.existsSync(hooksLibDir)) {
+      let removedLibFiles = 0;
+      for (const file of GSD_HOOK_LIB_FILES) {
+        const filePath = path.join(hooksLibDir, file);
+        try {
+          fs.unlinkSync(filePath);
+          removedLibFiles++;
+        } catch (_) {
+          // Ignore missing files (best effort, non-fatal)
+        }
+      }
+      // Only remove the directory itself if it is now empty (preserve any user files)
+      try {
+        fs.rmdirSync(hooksLibDir);
+      } catch (_) {
+        // Directory not empty or other error — leave it alone
+      }
+      if (removedLibFiles > 0) {
+        removedCount++;
+        console.log(`  ${green}✓${reset} Removed ${removedLibFiles} hooks/lib/ helper(s)`);
+      }
+    }
   }
 
   // 5. Remove GSD package.json (CommonJS mode marker)
@@ -7486,6 +7539,16 @@ function writeManifest(configDir, runtime = 'claude', options = {}) {
           manifest.files['hooks/' + file] = fileHash(path.join(hooksDir, file));
         }
       }
+      // Track hooks/lib/ helpers so saveLocalPatches() can back up user edits
+      // to git-cmd.js (validate-commit classifier) and gsd-graphify-rebuild.sh.
+      const hooksLibDir = path.join(hooksDir, 'lib');
+      if (fs.existsSync(hooksLibDir)) {
+        for (const file of fs.readdirSync(hooksLibDir)) {
+          if (GSD_HOOK_LIB_FILES.includes(file)) {
+            manifest.files['hooks/lib/' + file] = fileHash(path.join(hooksLibDir, file));
+          }
+        }
+      }
     }
   }
 
@@ -7749,6 +7812,36 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const dirName = getDirName(runtime);
   const src = path.join(__dirname, '..');
 
+  // Reusable helper to copy hooks/lib/ (git-cmd.js + gsd-graphify-rebuild.sh).
+  // Defined early so it is visible to both the main and Codex code paths.
+  // `allowlist` (when non-empty) restricts copying to the named top-level entries,
+  // keeping install scope aligned with GSD_HOOK_LIB_FILES (which uninstall/manifest manage).
+  const copyLibDir = (sDir, dDir, allowlist = []) => {
+    const allowed = allowlist.length > 0 ? new Set(allowlist) : null;
+    for (const entry of fs.readdirSync(sDir)) {
+      if (allowed && !allowed.has(entry)) continue;
+      const s = path.join(sDir, entry);
+      const d = path.join(dDir, entry);
+      let st;
+      try { st = fs.lstatSync(s); } catch (_) { continue; }
+      if (st.isSymbolicLink()) continue; // defense-in-depth
+      if (st.isDirectory()) {
+        fs.mkdirSync(d, { recursive: true });
+        copyLibDir(s, d);
+      } else if (entry.endsWith('.sh')) {
+        let content = fs.readFileSync(s, 'utf8');
+        content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
+        fs.writeFileSync(d, content);
+        try { fs.chmodSync(d, 0o755); } catch (_) { /* Windows */ }
+      } else {
+        fs.copyFileSync(s, d);
+        if (entry.endsWith('.js')) {
+          try { fs.chmodSync(d, 0o755); } catch (_) { /* Windows */ }
+        }
+      }
+    }
+  };
+
   // Get the target directory based on runtime and install type.
   // Cline local installs write to the project root (like Claude Code) — .clinerules
   // lives at the root, not inside a .cline/ subdirectory.
@@ -7761,6 +7854,45 @@ function install(isGlobal, runtime = 'claude', options = {}) {
   const locationLabel = isGlobal
     ? targetDir.replace(os.homedir(), '~')
     : targetDir.replace(process.cwd(), '.');
+
+  // #3406: warn if a stale standalone `@gsd-build/sdk` is globally installed
+  // and shadows the `gsd-sdk` shim this installer wires up. Only meaningful
+  // for global installs (the shim collision lives in the global node_modules
+  // bin dir). Guarded by GSD_SKIP_STALE_SDK_CHECK so CI/tests can silence it.
+  // #3406 CR: opt-out only on explicit "1" / "true" / "yes" rather than any
+  // non-empty value. Without this guard `GSD_SKIP_STALE_SDK_CHECK=0` and
+  // `GSD_SKIP_STALE_SDK_CHECK=false` would silently disable the check.
+  const skipRaw = process.env.GSD_SKIP_STALE_SDK_CHECK;
+  const skipStaleCheck = skipRaw === '1' || skipRaw === 'true' || skipRaw === 'yes';
+  if (isGlobal && !skipStaleCheck) {
+    try {
+      const { execFileSync } = require('child_process');
+      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const staleInfo = detectStaleStandaloneSdk(() => {
+        try {
+          return execFileSync(
+            npmCmd,
+            ['ls', '-g', '@gsd-build/sdk', '--json', '--depth=0'],
+            { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10_000 }
+          );
+        } catch (e) {
+          // `npm ls -g <missing>` exits 1 with the JSON still on stdout when
+          // the package is absent. execFileSync throws on non-zero exit but
+          // attaches stdout to the error. Recover the JSON in that case so
+          // the detector classifies "absent" correctly.
+          if (e && typeof e.stdout !== 'undefined') {
+            return Buffer.isBuffer(e.stdout) ? e.stdout.toString('utf-8') : String(e.stdout);
+          }
+          throw e;
+        }
+      });
+      if (staleInfo.stale) {
+        console.warn(`\n${yellow}${formatStaleStandaloneSdkWarning(staleInfo)}${reset}\n`);
+      }
+    } catch {
+      // Detection is best-effort; never block install on its failure.
+    }
+  }
 
   // Path prefix for file references in markdown content (e.g. gsd-tools.cjs).
   // Replaces $HOME/.claude/ or ~/.claude/ so the result is <pathPrefix>get-shit-done/bin/...
@@ -8661,6 +8793,27 @@ function install(isGlobal, runtime = 'claude', options = {}) {
               fs.copyFileSync(srcFile, destFile);
             }
           }
+        } else if (fs.statSync(srcFile).isDirectory()) {
+          // #3579: recurse one level into hook subdirs (lib/ etc.). The
+          // graphify auto-update hook's rebuild helper lives at
+          // hooks/dist/lib/gsd-graphify-rebuild.sh and must land at the
+          // mirrored target path so the hook's REBUILD_SCRIPT lookup resolves.
+          const subDest = path.join(hooksDest, entry);
+          fs.mkdirSync(subDest, { recursive: true });
+          const subEntries = fs.readdirSync(srcFile);
+          for (const subEntry of subEntries) {
+            const subSrcFile = path.join(srcFile, subEntry);
+            if (!fs.statSync(subSrcFile).isFile()) continue;
+            const subDestFile = path.join(subDest, subEntry);
+            if (subEntry.endsWith('.sh')) {
+              let content = fs.readFileSync(subSrcFile, 'utf8');
+              content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
+              fs.writeFileSync(subDestFile, content);
+              try { fs.chmodSync(subDestFile, 0o755); } catch (e) { /* Windows */ }
+            } else {
+              fs.copyFileSync(subSrcFile, subDestFile);
+            }
+          }
         }
       }
       if (verifyInstalled(hooksDest, 'hooks')) {
@@ -8676,6 +8829,18 @@ function install(isGlobal, runtime = 'claude', options = {}) {
         failures.push('hooks');
       }
     }
+  }
+
+  // Gate hooks/lib/ install on the same runtimes that receive hooks (see line ~8702).
+  // Codex/Copilot/Cursor/Windsurf/Trae/Cline skip hooks entirely, so they must not
+  // receive the hooks/lib/ helpers either — otherwise the Codex comment downstream
+  // ("we deliberately do *not* copy hooks/lib/ for Codex") is contradicted in practice.
+  const hooksLibSrc = path.join(src, 'hooks', 'lib');
+  if (!isCodex && !isCopilot && !isCursor && !isWindsurf && !isTrae && !isCline && fs.existsSync(hooksLibSrc)) {
+    const hooksLibDest = path.join(targetDir, 'hooks', 'lib');
+    fs.mkdirSync(hooksLibDest, { recursive: true });
+    copyLibDir(hooksLibSrc, hooksLibDest, GSD_HOOK_LIB_FILES);
+    console.log(`  ${green}✓${reset} Installed hooks/lib/ helpers (git-cmd, graphify-rebuild, ...)`);
   }
 
   // Clear stale update cache so next session re-evaluates hook versions
@@ -8938,15 +9103,18 @@ function install(isGlobal, runtime = 'claude', options = {}) {
       console.log(`  ${dim}↳${reset} Skipping Codex agent config generation (minimal install)`);
     }
 
-    // Copy hook files that are referenced by Codex hook configuration (#2153)
-    // The main hook-copy block is gated to non-Codex runtimes, but Codex registers
-    // gsd-check-update.js through hooks config — the file must physically exist.
+    // Copy only the hook files that Codex actually registers via its hook configuration (#2153).
+    // Codex primarily needs gsd-check-update.js for the SessionStart update-check hook.
+    // We deliberately do *not* copy gsd-graphify-update.sh or hooks/lib/ for Codex
+    // in this change (graphify auto-update support for Codex is out of scope for #3579).
+    const CODEX_HOOKS_TO_COPY = ['gsd-check-update.js'];
     const codexHooksSrc = path.join(src, 'hooks', 'dist');
     if (fs.existsSync(codexHooksSrc)) {
       const codexHooksDest = path.join(targetDir, 'hooks');
       fs.mkdirSync(codexHooksDest, { recursive: true });
       const configDirReplacement = getConfigDirFromHome(runtime, isGlobal);
       for (const entry of fs.readdirSync(codexHooksSrc)) {
+        if (!CODEX_HOOKS_TO_COPY.includes(entry)) continue;
         const srcFile = path.join(codexHooksSrc, entry);
         if (!fs.statSync(srcFile).isFile()) continue;
         const destFile = path.join(codexHooksDest, entry);
@@ -8958,18 +9126,20 @@ function install(isGlobal, runtime = 'claude', options = {}) {
           content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
           fs.writeFileSync(destFile, content);
           try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows */ }
-        } else {
-          if (entry.endsWith('.sh')) {
-            let content = fs.readFileSync(srcFile, 'utf8');
-            content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
-            fs.writeFileSync(destFile, content);
-            try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows */ }
-          } else {
-            fs.copyFileSync(srcFile, destFile);
-          }
+        } else if (entry.endsWith('.sh')) {
+          // #2136: any .sh hook reaching this loop must have {{GSD_VERSION}}
+          // stamped so installed scripts carry a concrete version header and
+          // stale-hook detection keeps working across upgrades. The current
+          // CODEX_HOOKS_TO_COPY allowlist excludes .sh files, so this branch
+          // is defensive — it preserves the invariant if the allowlist is
+          // extended later (e.g. to ship gsd-graphify-update.sh for Codex).
+          let content = fs.readFileSync(srcFile, 'utf8');
+          content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
+          fs.writeFileSync(destFile, content);
+          try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows */ }
         }
       }
-      console.log(`  ${green}✓${reset} Installed hooks`);
+      console.log(`  ${green}✓${reset} Installed hooks (Codex)`);
     }
 
     // Add Codex hooks (SessionStart for update checking) — requires codex_hooks feature flag
@@ -10488,6 +10658,80 @@ function installSdkIfNeeded(opts) {
 }
 
 /**
+ * #3406 helper: detect a stale globally-installed `@gsd-build/sdk` package
+ * shadowing the `gsd-sdk` shim that `get-shit-done-cc` installs.
+ *
+ * Background: `@gsd-build/sdk@0.1.0` was published once and never updated
+ * (the SDK now ships embedded in `get-shit-done-cc`). When a user has the
+ * 0.1.0 standalone package installed globally, its `gsd-sdk` bin shadows
+ * the one `get-shit-done-cc` provides — and the 0.1.0 binary only knows
+ * `run | auto | init` (no `query`), so every `gsd-sdk query <command>`
+ * call from skills/hooks fails until the user runs
+ * `npm uninstall -g @gsd-build/sdk`.
+ *
+ * Pure function: takes an injected `runNpmLs` executor that returns
+ * `npm ls -g @gsd-build/sdk --json --depth=0` stdout. Returns:
+ *   `{ stale: true, version }` when the package is present.
+ *   `{ stale: false }` for every other input — including:
+ *     - executor throws (npm missing / EACCES / network),
+ *     - executor returns null/undefined/non-string,
+ *     - stdout is not parseable JSON,
+ *     - the JSON has no `.dependencies['@gsd-build/sdk']` field.
+ *
+ * Fail-closed conservative: we'd rather miss a detection than fire a
+ * false-positive warning that confuses users who have a fine install.
+ */
+function detectStaleStandaloneSdk(runNpmLs) {
+  if (typeof runNpmLs !== 'function') return { stale: false };
+  let out;
+  try {
+    out = runNpmLs();
+  } catch {
+    return { stale: false };
+  }
+  if (typeof out !== 'string' || out.length === 0) return { stale: false };
+  let parsed;
+  try {
+    parsed = JSON.parse(out);
+  } catch {
+    return { stale: false };
+  }
+  const deps = parsed && typeof parsed === 'object' ? parsed.dependencies : null;
+  if (!deps || typeof deps !== 'object') return { stale: false };
+  const entry = deps['@gsd-build/sdk'];
+  if (!entry || typeof entry !== 'object') return { stale: false };
+  const version = typeof entry.version === 'string' ? entry.version : '(unknown)';
+  // #3406 CR: scope stale detection to the known-bad version (0.1.0). Any
+  // newer @gsd-build/sdk version is an intentional install (or a future
+  // republish) and should not be flagged as a shim shadow. Without this
+  // narrowing, a maintainer's local-link or a legitimate future publish
+  // would trigger a misleading "stale shadow" warning on every install.
+  if (version !== '0.1.0') return { stale: false };
+  return { stale: true, version };
+}
+
+/**
+ * #3406 helper: format the install-time warning emitted when
+ * `detectStaleStandaloneSdk` reports a stale shadow. Separated from the
+ * detection so the message contract is testable independently of npm.
+ */
+function formatStaleStandaloneSdkWarning(info) {
+  const version = info && info.version ? info.version : '(unknown)';
+  return [
+    '⚠  A stale globally-installed @gsd-build/sdk@' + version + ' is shadowing the',
+    '   `gsd-sdk` shim that get-shit-done-cc provides. The standalone package',
+    '   only knows `run | auto | init` — every `gsd-sdk query <cmd>` call from',
+    '   skills and hooks will fail until you remove it.',
+    '',
+    '   Remediation:',
+    '     npm uninstall -g @gsd-build/sdk',
+    '     npx -y get-shit-done-cc@latest --<runtime> --global',
+    '',
+    '   Tracking: #3406 — https://github.com/gsd-build/get-shit-done/issues/3406',
+  ].join('\n');
+}
+
+/**
  * #3231 helper: detect whether a `gsd-sdk` binary is the legacy deprecated
  * shim pointing at `gsd-tools.cjs`.
  *
@@ -11105,6 +11349,8 @@ if (process.env.GSD_TEST_MODE) {
     installAllRuntimes,
     uninstall,
     installSdkIfNeeded,
+    detectStaleStandaloneSdk,
+    formatStaleStandaloneSdkWarning,
     buildSdkFailFastReport,
     renderSdkFailFastReport,
     classifySdkInstall,
