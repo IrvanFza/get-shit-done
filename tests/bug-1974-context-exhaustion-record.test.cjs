@@ -18,6 +18,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const { cleanup } = require('./helpers.cjs');
 
 const HOOK_PATH = path.resolve(__dirname, '..', 'hooks', 'gsd-context-monitor.js');
 
@@ -99,10 +100,7 @@ describe('#1974 context exhaustion auto-record', () => {
   });
 
   afterEach(() => {
-    // Windows: AV/file-indexer/not-yet-exited fire-and-forget subprocess may
-    // still hold a handle on tmpDir at teardown. Match the helpers.cleanup()
-    // retry budget (20 × 250ms = 5s) to absorb the deferred-handle window.
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    cleanup(tmpDir);
     // Clean up bridge files
     try {
       const warnPath = path.join(os.tmpdir(), `claude-ctx-${sessionId}-warned.json`);

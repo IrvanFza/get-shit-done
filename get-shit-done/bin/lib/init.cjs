@@ -76,6 +76,54 @@ function withProjectRoot(cwd, result) {
   return result;
 }
 
+/**
+ * Return git-worktree state for init payloads with robust nested-subdir
+ * detection across Windows short/long path forms and slash variants.
+ */
+function getInitGitState(cwd) {
+  const info = gitWorktreeInfoInternal(cwd);
+  const worktreeRoot = info.worktreeRoot;
+  const normalizeForCompare = (p) => {
+    if (typeof p !== 'string' || p.length === 0) return null;
+    let resolved;
+    try {
+      resolved = fs.realpathSync.native(p);
+    } catch {
+      resolved = path.resolve(p);
+    }
+    resolved = path.resolve(resolved);
+    if (process.platform === 'win32') {
+      return resolved.replace(/\//g, '\\').toLowerCase();
+    }
+    return resolved;
+  };
+
+  let inNestedSubdir = info.inside && worktreeRoot !== null;
+  if (inNestedSubdir) {
+    const rootNorm = normalizeForCompare(worktreeRoot);
+    const cwdNorm = normalizeForCompare(cwd);
+    if (rootNorm && cwdNorm) {
+      if (rootNorm === cwdNorm) {
+        inNestedSubdir = false;
+      } else {
+        const rel = path.relative(rootNorm, cwdNorm);
+        const relNorm = process.platform === 'win32' ? rel.replace(/\//g, '\\') : rel;
+        inNestedSubdir =
+          relNorm !== '' &&
+          relNorm !== '.' &&
+          !relNorm.startsWith('..') &&
+          !path.isAbsolute(relNorm);
+      }
+    }
+  }
+
+  return {
+    has_git: info.inside,
+    git_worktree_root: worktreeRoot,
+    in_nested_subdir: inNestedSubdir,
+  };
+}
+
 function cmdInitExecutePhase(cwd, phase, raw, options = {}) {
   if (!phase) {
     error('phase required for init execute-phase');
@@ -475,31 +523,7 @@ function cmdInitNewProject(cwd, raw) {
     needs_codebase_map: (hasCode || hasPackageFile) && !pathExistsInternal(cwd, '.planning/codebase'),
 
     // Git state (Bug #3491: detect parent worktree to avoid nested .git init)
-    ...(() => {
-      const info = gitWorktreeInfoInternal(cwd);
-      const worktreeRoot = info.worktreeRoot;
-      // Canonicalize both sides before comparing: on Windows the runner's
-      // cwd may be the 8.3 short-name form (RUNNER~1) while git's
-      // --show-toplevel emits the long-form path with forward slashes.
-      // Without canonicalization, in_nested_subdir is `true` even at the
-      // worktree root (bug #3491). realpathSync.native handles 8.3→long
-      // expansion; path.resolve normalizes separators. Wrap in try so
-      // a missing path falls back to the original string compare.
-      let inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
-      if (inNestedSubdir) {
-        try {
-          const canonRoot = fs.realpathSync.native(worktreeRoot);
-          const canonCwd = fs.realpathSync.native(cwd);
-          const rel = path.relative(canonRoot, canonCwd);
-          inNestedSubdir = rel !== '' && !rel.startsWith('..');
-        } catch { /* keep raw-string compare result */ }
-      }
-      return {
-        has_git: info.inside,
-        git_worktree_root: worktreeRoot,
-        in_nested_subdir: inNestedSubdir,
-      };
-    })(),
+    ...getInitGitState(cwd),
 
     // Enhanced search
     brave_search_available: hasBraveSearch,
@@ -633,32 +657,7 @@ function cmdInitIngestDocs(cwd, raw) {
   const result = {
     project_exists: pathExistsInternal(cwd, '.planning/PROJECT.md'),
     planning_exists: fs.existsSync(planningRoot(cwd)),
-    ...(() => {
-      // Bug #3491 — see cmdInitNewProject above. Same shallow-check bug.
-      const info = gitWorktreeInfoInternal(cwd);
-      const worktreeRoot = info.worktreeRoot;
-      // Canonicalize both sides before comparing: on Windows the runner's
-      // cwd may be the 8.3 short-name form (RUNNER~1) while git's
-      // --show-toplevel emits the long-form path with forward slashes.
-      // Without canonicalization, in_nested_subdir is `true` even at the
-      // worktree root (bug #3491). realpathSync.native handles 8.3→long
-      // expansion; path.resolve normalizes separators. Wrap in try so
-      // a missing path falls back to the original string compare.
-      let inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
-      if (inNestedSubdir) {
-        try {
-          const canonRoot = fs.realpathSync.native(worktreeRoot);
-          const canonCwd = fs.realpathSync.native(cwd);
-          const rel = path.relative(canonRoot, canonCwd);
-          inNestedSubdir = rel !== '' && !rel.startsWith('..');
-        } catch { /* keep raw-string compare result */ }
-      }
-      return {
-        has_git: info.inside,
-        git_worktree_root: worktreeRoot,
-        in_nested_subdir: inNestedSubdir,
-      };
-    })(),
+    ...getInitGitState(cwd),
     project_path: '.planning/PROJECT.md',
     commit_docs: config.commit_docs,
   };
