@@ -47,7 +47,7 @@ describe('#2248: local Claude install does not clobber profile-level statusLine'
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   test('local install does not write statusLine to .claude/settings.json', (t) => {

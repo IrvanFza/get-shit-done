@@ -104,7 +104,10 @@ function createTempGitProject(prefix = 'gsd-test-') {
 }
 
 function cleanup(tmpDir) {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  // maxRetries/retryDelay absorbs transient Windows EBUSY where AV scanners,
+  // file-indexers, or just-exited child processes still hold handles when
+  // teardown runs. On POSIX the retry loop is a no-op (rmSync succeeds first try).
+  fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
 
 /**

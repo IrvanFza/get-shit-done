@@ -60,7 +60,7 @@ describe('#2698: CRLF stale gsd-update-check block is removed on Codex reinstall
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   // Helper: pre-populate .codex/config.toml with a GSD marker + stale hooks block

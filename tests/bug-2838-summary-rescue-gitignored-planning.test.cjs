@@ -163,7 +163,7 @@ ${rescueBlock}
 }
 
 function cleanup(tmp) {
-  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+  try { fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch (_) {}
 }
 
 describe('bug-2838: SUMMARY rescue handles gitignored .planning/', () => {
