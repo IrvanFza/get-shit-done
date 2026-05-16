@@ -463,7 +463,22 @@ function cmdInitNewProject(cwd, raw) {
     ...(() => {
       const info = gitWorktreeInfoInternal(cwd);
       const worktreeRoot = info.worktreeRoot;
-      const inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
+      // Canonicalize both sides before comparing: on Windows the runner's
+      // cwd may be the 8.3 short-name form (RUNNER~1) while git's
+      // --show-toplevel emits the long-form path with forward slashes.
+      // Without canonicalization, in_nested_subdir is `true` even at the
+      // worktree root (bug #3491). realpathSync.native handles 8.3→long
+      // expansion; path.resolve normalizes separators. Wrap in try so
+      // a missing path falls back to the original string compare.
+      let inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
+      if (inNestedSubdir) {
+        try {
+          const canonRoot = fs.realpathSync.native(worktreeRoot);
+          const canonCwd = fs.realpathSync.native(cwd);
+          const rel = path.relative(canonRoot, canonCwd);
+          inNestedSubdir = rel !== '' && !rel.startsWith('..');
+        } catch { /* keep raw-string compare result */ }
+      }
       return {
         has_git: info.inside,
         git_worktree_root: worktreeRoot,
@@ -607,7 +622,22 @@ function cmdInitIngestDocs(cwd, raw) {
       // Bug #3491 — see cmdInitNewProject above. Same shallow-check bug.
       const info = gitWorktreeInfoInternal(cwd);
       const worktreeRoot = info.worktreeRoot;
-      const inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
+      // Canonicalize both sides before comparing: on Windows the runner's
+      // cwd may be the 8.3 short-name form (RUNNER~1) while git's
+      // --show-toplevel emits the long-form path with forward slashes.
+      // Without canonicalization, in_nested_subdir is `true` even at the
+      // worktree root (bug #3491). realpathSync.native handles 8.3→long
+      // expansion; path.resolve normalizes separators. Wrap in try so
+      // a missing path falls back to the original string compare.
+      let inNestedSubdir = info.inside && worktreeRoot !== null && worktreeRoot !== cwd;
+      if (inNestedSubdir) {
+        try {
+          const canonRoot = fs.realpathSync.native(worktreeRoot);
+          const canonCwd = fs.realpathSync.native(cwd);
+          const rel = path.relative(canonRoot, canonCwd);
+          inNestedSubdir = rel !== '' && !rel.startsWith('..');
+        } catch { /* keep raw-string compare result */ }
+      }
       return {
         has_git: info.inside,
         git_worktree_root: worktreeRoot,
