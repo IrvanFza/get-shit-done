@@ -39,6 +39,7 @@ describe('bug #3589: relPlanningPath rejects path-traversal and invalid workstre
   it('returns .planning when workstream is omitted (unchanged)', () => {
     expect(relPlanningPath()).toBe('.planning');
     expect(relPlanningPath(undefined)).toBe('.planning');
+    expect(relPlanningPath('')).toBe('.planning');
   });
 
   it('returns .planning/workstreams/<name> for valid workstream names (unchanged)', () => {
