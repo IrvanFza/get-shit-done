@@ -31,6 +31,8 @@ const path = require('path');
 const { installSdkIfNeeded } = require('../bin/install.js');
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
+const isWindows = process.platform === 'win32';
+
 function captureConsole(fn) {
   const stdout = [];
   const stderr = [];
@@ -58,7 +60,9 @@ function captureConsole(fn) {
   };
 }
 
-describe('bug #2829: local-mode install must materialize gsd-sdk on PATH', () => {
+describe('bug #2829: local-mode install must materialize gsd-sdk on PATH',
+  { skip: isWindows ? 'POSIX-only: asserts ~/.local/bin shebang shim; Windows uses gsd-sdk.cmd + USERPROFILE + PATHEXT' : false },
+  () => {
   let tmpRoot;
   let sdkDir;
   let pathDir;

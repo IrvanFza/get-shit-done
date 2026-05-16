@@ -28,6 +28,8 @@ const os = require('os');
 const { installSdkIfNeeded } = require('../bin/install.js');
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
+const isWindows = process.platform === 'win32';
+
 function captureConsole(fn) {
   const stdout = [];
   const stderr = [];
@@ -55,7 +57,9 @@ function captureConsole(fn) {
   };
 }
 
-describe('bug #3033: --sdk flag (opts.forceSdk) must be wired into installSdkIfNeeded', () => {
+describe('bug #3033: --sdk flag (opts.forceSdk) must be wired into installSdkIfNeeded',
+  { skip: isWindows ? 'POSIX-only: forces shebang gsd-sdk shim into ~/.local/bin and asserts mode 0o755' : false },
+  () => {
   let tmpRoot;
   let sdkDir;
   let pathDir;

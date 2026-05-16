@@ -36,6 +36,8 @@ const fs = require('fs');
 const path = require('path');
 
 const installModule = require('../bin/install.js');
+
+const isWindows = process.platform === 'win32';
 const { installSdkIfNeeded } = installModule;
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
@@ -71,7 +73,9 @@ function captureConsole(fn) {
   };
 }
 
-describe('bug #2775: installSdkIfNeeded must verify gsd-sdk on PATH before reporting ready', () => {
+describe('bug #2775: installSdkIfNeeded must verify gsd-sdk on PATH before reporting ready',
+  { skip: isWindows ? 'POSIX-only: asserts ~/.local/bin shebang shim with mode 0o755; Windows uses gsd-sdk.cmd + PATHEXT + registry Path' : false },
+  () => {
   let tmpRoot;
   let sdkDir;
   let pathDir;

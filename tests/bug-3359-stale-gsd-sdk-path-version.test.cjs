@@ -21,6 +21,8 @@ const cp = require('node:child_process');
 const pkg = require('../package.json');
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
+const isWindows = process.platform === 'win32';
+
 function captureConsole(fn) {
   const stdout = [];
   const stderr = [];
@@ -48,7 +50,9 @@ function captureConsole(fn) {
   };
 }
 
-describe('bug #3359: installer detects stale gsd-sdk earlier on PATH', () => {
+describe('bug #3359: installer detects stale gsd-sdk earlier on PATH',
+  { skip: isWindows ? 'POSIX-only: stages bare gsd-sdk shebang shims in a PATH dir; Windows uses .cmd + PATHEXT resolution' : false },
+  () => {
   let tmpRoot;
   let sdkDir;
   let pathDir;

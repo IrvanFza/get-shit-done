@@ -234,12 +234,12 @@ test('platformWriteSync handles paths with spaces, unicode, and newline characte
   const cases = [
     'has spaces in name.json',
     'unicode-日本語-name.json',
-    'with	tab.json',
-    // Note: newlines in filenames are POSIX-valid but Windows-illegal.
-    // The test runs on whatever platform CI picks; we skip the
-    // newline case on Windows to keep cross-platform CI green.
   ];
   if (process.platform !== 'win32') {
+    // Tab (0x09) and newline (0x0A) in filenames are POSIX-valid but
+    // Windows-illegal (NTFS forbids control characters 0x00–0x1F). Append
+    // both only on POSIX so cross-platform CI stays green.
+    cases.push('with\ttab.json');
     cases.push('with\nnewline.json');
   }
 

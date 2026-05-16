@@ -51,6 +51,8 @@ const cp = require('node:child_process');
 const ROOT = path.join(__dirname, '..');
 const installModule = require(path.join(ROOT, 'bin', 'install.js'));
 
+const isWindows = process.platform === 'win32';
+
 const {
   filterNpxFromPath,
   isLegacyGsdSdkShim,
@@ -202,7 +204,9 @@ describe('bug #3211-C: getUserShellWindowsPersistentPath export', () => {
     }
   });
 
-  test('when the PowerShell probe is mocked to return a path, strips _npx dirs', () => {
+  test('when the PowerShell probe is mocked to return a path, strips _npx dirs',
+    { skip: isWindows ? 'cp.execSync reassignment is not picked up by install.js on Windows; real registry Path is returned. POSIX coverage in mock; live Windows path is covered by 3211-D.' : false },
+    () => {
     // Mock cp.execSync to return a Windows Path with both persistent and _npx dirs.
     const savedExecSync = cp.execSync;
     const winPersistentDir = 'C:\\Users\\user\\AppData\\Roaming\\npm';
