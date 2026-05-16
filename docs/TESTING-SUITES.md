@@ -72,6 +72,6 @@ Each matrix cell runs `unit`, `integration`, and `security` on every PR. `instal
 ## Best practices for forward-compat (Node 24/26)
 
 - Use `process.execPath` when spawning Node in tests so each matrix lane exercises the lane's Node version.
-- Avoid exact stack-trace or error-message prose assertions. Assert `err.code`, structured JSON, or a stable message substring instead — Node minor releases routinely tweak error wording.
+- Avoid stack-trace or error-message prose assertions. Assert `err.code`, structured JSON fields, or enums — Node minor releases routinely tweak error wording.
 - Prefer `node:test`, `node:assert/strict`, and `node:test` mocks. No external test frameworks.
 - Coverage uses `c8` and propagates `NODE_V8_COVERAGE` through the harness's child process.

@@ -103,7 +103,7 @@ function main() {
     .sort();
 
   if (allFiles.length === 0) {
-    console.error('No test files found in tests/');
+    console.error(`No test files found in ${testDir}`);
     process.exit(1);
   }
 
