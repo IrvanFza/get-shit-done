@@ -34,10 +34,10 @@ function seed(dir, names) {
   }
 }
 
-function runHarness(testDir, args = []) {
+function runHarness(testDir, args = [], extraEnv = {}) {
   // Clear node:test parent-context env so the harness's child `node --test`
   // doesn't refuse to run with "recursive run() skipping running files".
-  const env = { ...process.env, GSD_TEST_DIR: testDir };
+  const env = { ...process.env, GSD_TEST_DIR: testDir, ...extraEnv };
   delete env.NODE_TEST_CONTEXT;
   return spawnSync(process.execPath, [HARNESS, ...args], {
     cwd: path.join(__dirname, '..'),
@@ -204,6 +204,36 @@ test('boom', () => { throw new Error('intentional'); });
         r.status,
         0,
         `expected non-zero exit; got status=${r.status} signal=${r.signal}\nSTDOUT:\n${r.stdout}\nSTDERR:\n${r.stderr}`,
+      );
+    });
+  });
+
+  describe('Windows argv-overflow chunking (issue #3597)', () => {
+    // Windows CreateProcess caps lpCommandLine at 32,767 chars. With ~550
+    // tests the unchunked spawn fails instantly on Windows with no test
+    // output. Linux/macOS allow ~2 MB so the same path works there. The
+    // harness chunks selected files so each spawn stays under the ceiling,
+    // and chunking is observable via the `run-tests: chunk N/M …` stderr
+    // line. Long filenames force chunking even with a modest file count so
+    // the test stays fast on every platform.
+    test('chunks when total argv would exceed configured ceiling', () => {
+      // Use a deliberately low MAX_CMDLINE_CHARS so the test is independent
+      // of tmp-path length (varies by OS). With a 2000-char ceiling and 30
+      // tests at ≥100 char paths, chunking must engage and at least one
+      // `chunk N/M …` marker must appear in stderr.
+      const longPrefix = 'a-deliberately-long-test-filename-to-force-chunking-behavior-cross-platform-';
+      const names = Array.from({ length: 30 }, (_, i) => `${longPrefix}${String(i).padStart(4, '0')}.test.cjs`);
+      seed(tmpDir, names);
+      const r = runHarness(tmpDir, [], { RUN_TESTS_MAX_CMDLINE_CHARS: '2000' });
+      assert.strictEqual(
+        r.status,
+        0,
+        `expected zero exit; got status=${r.status} signal=${r.signal}\nSTDERR (tail):\n${r.stderr.split('\n').slice(-20).join('\n')}`,
+      );
+      assert.match(
+        r.stderr,
+        /run-tests: chunk \d+\/\d+ — \d+ files/,
+        `expected chunking marker in stderr; STDERR (tail):\n${r.stderr.split('\n').slice(-20).join('\n')}`,
       );
     });
   });

@@ -130,14 +130,49 @@ function main() {
     ? `--test-concurrency=${process.env.TEST_CONCURRENCY}`
     : '--test-concurrency=4';
 
-  try {
-    execFileSync(process.execPath, ['--test', concurrency, ...selected], {
-      stdio: 'inherit',
-      env: { ...process.env },
-    });
-  } catch (err) {
-    process.exit(err.status || 1);
+  // Windows `CreateProcess` caps the full command line at 32,767 chars
+  // (lpCommandLine). With 500+ test paths the spawn fails instantly with no
+  // test output. Linux/macOS allow ~2 MB (ARG_MAX) so unchunked spawns are
+  // fine there. Split into chunks sized for the tightest target so behavior
+  // is identical across platforms. (#3597)
+  // Operator override (also used by tests to force chunking with short paths).
+  const MAX_CMDLINE_CHARS = process.env.RUN_TESTS_MAX_CMDLINE_CHARS
+    ? Number(process.env.RUN_TESTS_MAX_CMDLINE_CHARS)
+    : 28000; // headroom below the 32,767 Windows ceiling
+  const FIXED_OVERHEAD = process.execPath.length + '--test'.length + concurrency.length + 8;
+  const chunks = [];
+  let current = [];
+  let currentLen = FIXED_OVERHEAD;
+  for (const file of selected) {
+    const add = file.length + 1; // +1 for the inter-arg separator
+    if (current.length > 0 && currentLen + add > MAX_CMDLINE_CHARS) {
+      chunks.push(current);
+      current = [];
+      currentLen = FIXED_OVERHEAD;
+    }
+    current.push(file);
+    currentLen += add;
   }
+  if (current.length > 0) chunks.push(current);
+
+  let firstFailureExit = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    if (chunks.length > 1) {
+      console.error(`run-tests: chunk ${i + 1}/${chunks.length} — ${chunks[i].length} files`);
+    }
+    try {
+      execFileSync(process.execPath, ['--test', concurrency, ...chunks[i]], {
+        stdio: 'inherit',
+        env: { ...process.env },
+      });
+    } catch (err) {
+      const code = err.status || 1;
+      // Run every chunk so the operator sees all failures in one pass; report
+      // the first non-zero exit at the end.
+      if (firstFailureExit === 0) firstFailureExit = code;
+    }
+  }
+  if (firstFailureExit !== 0) process.exit(firstFailureExit);
 }
 
 main();
