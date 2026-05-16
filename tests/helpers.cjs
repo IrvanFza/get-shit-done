@@ -107,7 +107,9 @@ function cleanup(tmpDir) {
   // maxRetries/retryDelay absorbs transient Windows EBUSY where AV scanners,
   // file-indexers, or just-exited child processes still hold handles when
   // teardown runs. On POSIX the retry loop is a no-op (rmSync succeeds first try).
-  fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  // Budget: 20 × 250ms = 5s total — Windows Defender's deferred scan can hold
+  // newly-written files for several seconds on cold runners.
+  fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 }
 
 /**
