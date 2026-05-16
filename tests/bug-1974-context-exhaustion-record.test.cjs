@@ -99,7 +99,10 @@ describe('#1974 context exhaustion auto-record', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    // Windows: AV/file-indexer/not-yet-exited fire-and-forget subprocess may
+    // still hold a handle on tmpDir at teardown. Match the helpers.cleanup()
+    // retry budget (20 × 250ms = 5s) to absorb the deferred-handle window.
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
     // Clean up bridge files
     try {
       const warnPath = path.join(os.tmpdir(), `claude-ctx-${sessionId}-warned.json`);
