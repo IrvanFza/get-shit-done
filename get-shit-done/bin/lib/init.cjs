@@ -130,6 +130,15 @@ function getInitGitState(cwd) {
     }
   }
 
+  // Defensive final guard: if git reports the same root path as cwd (after
+  // slash/case normalization), we are at the worktree root, never nested.
+  if (inNestedSubdir && typeof worktreeRoot === 'string') {
+    const toComparableRaw = (p) => p.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase();
+    if (toComparableRaw(worktreeRoot) === toComparableRaw(String(cwd))) {
+      inNestedSubdir = false;
+    }
+  }
+
   return {
     has_git: info.inside,
     git_worktree_root: worktreeRoot,
