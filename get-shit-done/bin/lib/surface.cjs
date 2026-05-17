@@ -208,9 +208,7 @@ function applySurface(runtimeConfigDir, layout, manifest, clusterMap) {
   for (const kind of layout.kinds) {
     const staged = kind.stage(resolved);
     const dest = path.join(layout.configDir, kind.destSubpath);
-    if (fs.existsSync(dest)) {
-      _syncGsdDir(staged, dest, kind);
-    }
+    _syncGsdDir(staged, dest, kind, manifest);
   }
   return resolved;
 }
@@ -224,11 +222,16 @@ function applySurface(runtimeConfigDir, layout, manifest, clusterMap) {
  *   by copying recursively; remove dirs not in staged set. Preserves dirs not matching
  *   the prefix (user-owned skills).
  *
+ * For Hermes (empty prefix): uses manifest membership to discriminate GSD-owned vs
+ * user-owned dirs. GSD-owned = stem in manifest; removal targets = in manifest AND
+ * not in staged set. User-owned (not in manifest) are always preserved.
+ *
  * @param {string} stagedDir source (staged temp dir or original)
  * @param {string} destDir runtime destination
  * @param {import('./runtime-artifact-layout.cjs').ArtifactKind|'commands'|'agents'} kind
+ * @param {Map<string, string[]>} [manifest] optional; required for Hermes empty-prefix removal
  */
-function _syncGsdDir(stagedDir, destDir, kind) {
+function _syncGsdDir(stagedDir, destDir, kind, manifest) {
   if (!fs.existsSync(stagedDir)) return;
   fs.mkdirSync(destDir, { recursive: true });
 
@@ -256,22 +259,35 @@ function _syncGsdDir(stagedDir, destDir, kind) {
       }
     }
 
-    // Empty prefix = destSubpath is the GSD namespace (Hermes: skills/gsd/).
-    // With no prefix filter, we cannot safely distinguish GSD-owned from user-owned dirs,
-    // so we only remove dirs that match the prefix. When kindPrefix === '',
-    // startsWith('') is always true but we must guard: skip removal entirely if prefix is
-    // empty so user dirs under skills/gsd/ are preserved (Hermes user-skill safety).
-    if (kindPrefix !== '') {
-      // Remove prefix-matched dirs in dest that are not in staged set
-      const destEntries = fs.readdirSync(destDir);
-      for (const entry of destEntries) {
-        const entryPath = path.join(destDir, entry);
-        if (!fs.statSync(entryPath).isDirectory()) continue;
-        if (!entry.startsWith(kindPrefix)) continue; // preserve user-owned dirs
-        if (!stagedDirs.has(entry)) {
-          try { fs.rmSync(entryPath, { recursive: true, force: true }); } catch {}
-        }
+    // Removal: discriminator depends on prefix shape.
+    // Non-empty prefix: GSD namespace IS the prefix; remove prefix-matching dirs not in staged set.
+    // Empty prefix (Hermes): GSD-owned = stem in manifest (i.e. canonically-shipped GSD skill).
+    //                        User-owned skills not in manifest are preserved.
+    // No manifest available: be conservative, don't remove anything.
+    const canonicalStems = manifest
+      ? new Set([...manifest.keys()].filter(k => !k.startsWith('_calls_agents_')))
+      : null;
+
+    const destEntries = fs.readdirSync(destDir);
+    for (const entry of destEntries) {
+      const entryPath = path.join(destDir, entry);
+      if (!fs.statSync(entryPath).isDirectory()) continue;
+
+      let isGsdOwned;
+      if (kindPrefix !== '') {
+        isGsdOwned = entry.startsWith(kindPrefix);
+      } else if (canonicalStems) {
+        // Hermes: empty prefix, destSubpath is the namespace.
+        // GSD-owned iff the directory name (stem) appears in the canonical manifest.
+        isGsdOwned = canonicalStems.has(entry);
+      } else {
+        // No manifest available: be conservative, don't remove anything.
+        continue;
       }
+
+      if (!isGsdOwned) continue;           // preserve user-owned
+      if (stagedDirs.has(entry)) continue; // current GSD-owned, keep
+      try { fs.rmSync(entryPath, { recursive: true, force: true }); } catch {}
     }
   } else {
     // commands / agents kind: work with .md files

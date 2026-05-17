@@ -202,6 +202,31 @@ describe('applySurface', () => {
     assert.ok(fs.existsSync(foreignDir), 'my-custom-skill dir should be preserved');
   });
 
+  test('applySurface recreates missing destination directories', (t) => {
+    // Fixture: layout configDir exists but the dest subdirectory for the kinds does NOT.
+    const base = createTempDir('gsd-surface-missing-dest-');
+    t.after(() => cleanup(base));
+    const runtimeConfigDir = base;
+    // Do NOT pre-create commands/gsd or agents — they are intentionally absent.
+    writeActiveProfile(runtimeConfigDir, 'core');
+    writeSurface(runtimeConfigDir, {
+      baseProfile: 'core',
+      disabledClusters: [],
+      explicitAdds: [],
+      explicitRemoves: [],
+    });
+    const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
+    const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
+    applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
+
+    // commands/gsd must have been created and populated
+    const commandsDir = path.join(runtimeConfigDir, 'commands', 'gsd');
+    assert.ok(fs.existsSync(commandsDir), 'commands/gsd dir should be created even if initially absent');
+    const files = fs.readdirSync(commandsDir).filter(f => f.endsWith('.md'));
+    assert.ok(files.length > 0, 'commands/gsd should contain staged skill files');
+    assert.ok(files.includes('help.md'), 'help.md should be present after applySurface on missing dest');
+  });
+
   test('_syncGsdDir skills kind (hermes): preserves non-GSD user dir under skills/gsd/ when kindPrefix is empty', (t) => {
     const { _syncGsdDir } = require('../get-shit-done/bin/lib/surface.cjs');
 
