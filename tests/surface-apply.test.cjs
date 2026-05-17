@@ -220,4 +220,39 @@ describe('applySurface', () => {
       fs.rmSync(base, { recursive: true, force: true });
     }
   });
+
+  test('_syncGsdDir skills kind (hermes): preserves non-GSD user dir under skills/gsd/ when kindPrefix is empty', () => {
+    const { _syncGsdDir } = require('../get-shit-done/bin/lib/surface.cjs');
+
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-surface-hermes-'));
+    try {
+      const stagedDir = path.join(base, 'staged');
+      const destDir = path.join(base, 'dest');
+      fs.mkdirSync(destDir, { recursive: true });
+
+      // Staged contains a GSD skill named 'help' (no prefix under hermes skills/gsd/)
+      const stem1 = 'help';
+      fs.mkdirSync(path.join(stagedDir, stem1), { recursive: true });
+      fs.writeFileSync(path.join(stagedDir, stem1, 'SKILL.md'), '# help\n', 'utf8');
+
+      // Dest also has a user-owned custom skill dir (no gsd- prefix — Hermes namespace)
+      const userDir = path.join(destDir, 'user-custom-skill');
+      fs.mkdirSync(userDir, { recursive: true });
+      fs.writeFileSync(path.join(userDir, 'SKILL.md'), '# user custom\n', 'utf8');
+
+      // kindPrefix === '' simulates Hermes (destSubpath = skills/gsd, prefix = '')
+      const hermesKind = { kind: 'skills', destSubpath: 'skills/gsd', prefix: '', stage: () => stagedDir };
+
+      _syncGsdDir(stagedDir, destDir, hermesKind);
+
+      // The user's custom skill dir must be preserved — it's not in staged but should not be removed
+      // (Fix 4: when kindPrefix === '', skip the startsWith guard and preserve ALL non-staged dirs)
+      assert.ok(fs.existsSync(userDir), 'user-custom-skill dir must be preserved when kindPrefix is empty (Hermes)');
+
+      // The staged skill must still be copied
+      assert.ok(fs.existsSync(path.join(destDir, stem1, 'SKILL.md')), 'GSD help/SKILL.md must be copied');
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
 });

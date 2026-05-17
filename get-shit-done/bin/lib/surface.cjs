@@ -256,14 +256,21 @@ function _syncGsdDir(stagedDir, destDir, kind) {
       }
     }
 
-    // Remove dirs in dest that match the prefix but are not in staged set
-    const destEntries = fs.readdirSync(destDir);
-    for (const entry of destEntries) {
-      const entryPath = path.join(destDir, entry);
-      if (!fs.statSync(entryPath).isDirectory()) continue;
-      if (!entry.startsWith(kindPrefix)) continue; // only touch prefix-matched dirs
-      if (!stagedDirs.has(entry)) {
-        try { fs.rmSync(entryPath, { recursive: true, force: true }); } catch {}
+    // Empty prefix = destSubpath is the GSD namespace (Hermes: skills/gsd/).
+    // With no prefix filter, we cannot safely distinguish GSD-owned from user-owned dirs,
+    // so we only remove dirs that match the prefix. When kindPrefix === '',
+    // startsWith('') is always true but we must guard: skip removal entirely if prefix is
+    // empty so user dirs under skills/gsd/ are preserved (Hermes user-skill safety).
+    if (kindPrefix !== '') {
+      // Remove prefix-matched dirs in dest that are not in staged set
+      const destEntries = fs.readdirSync(destDir);
+      for (const entry of destEntries) {
+        const entryPath = path.join(destDir, entry);
+        if (!fs.statSync(entryPath).isDirectory()) continue;
+        if (!entry.startsWith(kindPrefix)) continue; // preserve user-owned dirs
+        if (!stagedDirs.has(entry)) {
+          try { fs.rmSync(entryPath, { recursive: true, force: true }); } catch {}
+        }
       }
     }
   } else {
