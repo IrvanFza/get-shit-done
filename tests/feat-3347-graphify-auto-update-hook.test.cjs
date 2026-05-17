@@ -266,8 +266,12 @@ describe('#3347 hook — dispatch path (all gates pass)',
     let status;
     while (Date.now() < deadline) {
       if (fs.existsSync(statusPath)) {
-        status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-        if (status.status === 'ok') break;
+        try {
+          status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+          if (status.status === 'ok') break;
+        } catch {
+          // Detached writer can briefly expose a partial JSON write.
+        }
       }
       cp.execFileSync('sleep', ['0.1']);
     }
@@ -295,8 +299,12 @@ describe('#3347 hook — dispatch path (all gates pass)',
     let status;
     while (Date.now() < deadline) {
       if (fs.existsSync(statusPath)) {
-        status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-        if (status.status === 'failed') break;
+        try {
+          status = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+          if (status.status === 'failed') break;
+        } catch {
+          // Detached writer can briefly expose a partial JSON write.
+        }
       }
       cp.execFileSync('sleep', ['0.1']);
     }
