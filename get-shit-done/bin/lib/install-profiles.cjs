@@ -374,7 +374,30 @@ function stageAgentsForProfile(srcAgentsDir, resolvedProfile) {
 }
 
 function stageSkillsForRuntimeAsSkills(srcCommandsDir, resolvedProfile, converter, prefix) {
-  // stub
+  if (!fs.existsSync(srcCommandsDir)) return srcCommandsDir;
+
+  const stageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-profile-runtime-skills-'));
+  try {
+    const entries = fs.readdirSync(srcCommandsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith('.md')) continue;
+      const stem = entry.name.slice(0, -3);
+      if (resolvedProfile.skills !== '*' && !resolvedProfile.skills.has(stem)) continue;
+      const content = fs.readFileSync(path.join(srcCommandsDir, entry.name), 'utf8');
+      const skillName = `${prefix}${stem}`;
+      const converted = converter(content, skillName);
+      const destDir = path.join(stageDir, skillName);
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, 'SKILL.md'), converted);
+    }
+  } catch (err) {
+    try { fs.rmSync(stageDir, { recursive: true, force: true }); } catch {}
+    throw err;
+  }
+  STAGED_DIRS.add(stageDir);
+  ensureExitCleanup();
+  return stageDir;
 }
 
 // ---------------------------------------------------------------------------
