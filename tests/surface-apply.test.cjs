@@ -12,6 +12,7 @@ const os = require('os');
 const { writeSurface, applySurface } = require('../get-shit-done/bin/lib/surface.cjs');
 const { loadSkillsManifest, writeActiveProfile } = require('../get-shit-done/bin/lib/install-profiles.cjs');
 const { CLUSTERS } = require('../get-shit-done/bin/lib/clusters.cjs');
+const { resolveRuntimeArtifactLayout } = require('../get-shit-done/bin/lib/runtime-artifact-layout.cjs');
 
 const REAL_COMMANDS_DIR = path.join(__dirname, '..', 'commands', 'gsd');
 const REAL_AGENTS_DIR = path.join(__dirname, '..', 'agents');
@@ -21,20 +22,18 @@ function tmpDir() {
 }
 
 /**
- * Create a minimal fixture install dir structure.
- * Returns { runtimeConfigDir, commandsDir, agentsDir }.
- * runtimeConfigDir has a .gsd-source marker pointing to REAL_COMMANDS_DIR.
+ * Create a minimal fixture install dir structure for claude/local layout.
+ * runtimeConfigDir is the layout configDir.
+ * commandsDir = runtimeConfigDir/commands/gsd
+ * agentsDir   = runtimeConfigDir/agents
  */
 function createFixtureRuntime() {
   const base = tmpDir();
-  const runtimeConfigDir = path.join(base, 'config');
-  const commandsDir = path.join(base, 'commands', 'gsd');
-  const agentsDir = path.join(base, 'agents');
-  fs.mkdirSync(runtimeConfigDir, { recursive: true });
+  const runtimeConfigDir = base;
+  const commandsDir = path.join(runtimeConfigDir, 'commands', 'gsd');
+  const agentsDir = path.join(runtimeConfigDir, 'agents');
   fs.mkdirSync(commandsDir, { recursive: true });
   fs.mkdirSync(agentsDir, { recursive: true });
-  // Write source marker so surface.cjs can find the install source
-  fs.writeFileSync(path.join(runtimeConfigDir, '.gsd-source'), REAL_COMMANDS_DIR, 'utf8');
   return { base, runtimeConfigDir, commandsDir, agentsDir };
 }
 
@@ -50,7 +49,8 @@ describe('applySurface', () => {
         explicitRemoves: [],
       });
       const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
-      applySurface(runtimeConfigDir, commandsDir, agentsDir, manifest, CLUSTERS);
+      const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
+      applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
       const files = fs.readdirSync(commandsDir).filter(f => f.endsWith('.md'));
       // Every file should be a real stem we know about
@@ -79,7 +79,8 @@ describe('applySurface', () => {
         explicitRemoves: [],
       });
       const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
-      applySurface(runtimeConfigDir, commandsDir, agentsDir, manifest, CLUSTERS);
+      const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
+      applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
       const afterStandard = new Set(fs.readdirSync(commandsDir).filter(f => f.endsWith('.md')));
 
@@ -90,7 +91,7 @@ describe('applySurface', () => {
         explicitAdds: [],
         explicitRemoves: [],
       });
-      applySurface(runtimeConfigDir, commandsDir, agentsDir, manifest, CLUSTERS);
+      applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
       const afterCore = new Set(fs.readdirSync(commandsDir).filter(f => f.endsWith('.md')));
 
@@ -126,7 +127,8 @@ describe('applySurface', () => {
         explicitRemoves: [],
       });
       const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
-      applySurface(runtimeConfigDir, commandsDir, agentsDir, manifest, CLUSTERS);
+      const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
+      applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
       // Non-gsd file should still be there
       assert.ok(fs.existsSync(foreignAgent), 'non-gsd agent file should not be touched');
@@ -147,7 +149,8 @@ describe('applySurface', () => {
         explicitRemoves: [],
       });
       const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
-      applySurface(runtimeConfigDir, commandsDir, agentsDir, manifest, CLUSTERS);
+      const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
+      applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
       // Core skills should now be present
       assert.ok(
@@ -158,6 +161,61 @@ describe('applySurface', () => {
         fs.existsSync(path.join(commandsDir, 'new-project.md')),
         'new-project.md should be copied from install source'
       );
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test('_syncGsdDir skills kind: adds missing skill dirs, removes stale prefix-matched dirs, preserves foreign dirs', () => {
+    const { _syncGsdDir } = require('../get-shit-done/bin/lib/surface.cjs');
+    const { stageSkillsForRuntimeAsSkills } = require('../get-shit-done/bin/lib/install-profiles.cjs');
+    const { findInstallSourceRoot } = require('../get-shit-done/bin/lib/runtime-artifact-layout.cjs');
+    // Minimal converter that produces SKILL.md with given stem
+    function converter(stem, content) {
+      return [
+        '---',
+        `name: ${stem}`,
+        '---',
+        content,
+      ].join('\n');
+    }
+
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-surface-skills-'));
+    try {
+      const stagedDir = path.join(base, 'staged');
+      const destDir = path.join(base, 'dest');
+      fs.mkdirSync(destDir, { recursive: true });
+
+      // Build a staged dir manually: gsd-help/SKILL.md and gsd-update/SKILL.md
+      const stem1 = 'gsd-help';
+      const stem2 = 'gsd-update';
+      fs.mkdirSync(path.join(stagedDir, stem1), { recursive: true });
+      fs.writeFileSync(path.join(stagedDir, stem1, 'SKILL.md'), '# help\n', 'utf8');
+      fs.mkdirSync(path.join(stagedDir, stem2), { recursive: true });
+      fs.writeFileSync(path.join(stagedDir, stem2, 'SKILL.md'), '# update\n', 'utf8');
+
+      // In destDir: stale gsd- dir + foreign user dir
+      const staleDir = path.join(destDir, 'gsd-old-skill');
+      fs.mkdirSync(staleDir, { recursive: true });
+      fs.writeFileSync(path.join(staleDir, 'SKILL.md'), '# old\n', 'utf8');
+
+      const foreignDir = path.join(destDir, 'my-custom-skill');
+      fs.mkdirSync(foreignDir, { recursive: true });
+      fs.writeFileSync(path.join(foreignDir, 'SKILL.md'), '# custom\n', 'utf8');
+
+      const skillsKind = { kind: 'skills', destSubpath: 'skills', prefix: 'gsd-', stage: () => stagedDir };
+
+      _syncGsdDir(stagedDir, destDir, skillsKind);
+
+      // staged dirs copied
+      assert.ok(fs.existsSync(path.join(destDir, stem1, 'SKILL.md')), 'gsd-help/SKILL.md should be copied');
+      assert.ok(fs.existsSync(path.join(destDir, stem2, 'SKILL.md')), 'gsd-update/SKILL.md should be copied');
+
+      // stale gsd- dir removed
+      assert.ok(!fs.existsSync(staleDir), 'stale gsd-old-skill dir should be removed');
+
+      // foreign dir preserved
+      assert.ok(fs.existsSync(foreignDir), 'my-custom-skill dir should be preserved');
     } finally {
       fs.rmSync(base, { recursive: true, force: true });
     }
