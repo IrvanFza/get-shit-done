@@ -27,18 +27,15 @@ describe('commands kind — stage (gemini)', () => {
     assert.ok(commandsKind, 'should have a commands kind');
 
     const stagedDir = commandsKind.stage(PROFILE_CORE);
-    try {
-      const entries = fs.readdirSync(stagedDir).filter(f => f.endsWith('.md'));
-      // All staged files must come from the selected skill set
-      for (const entry of entries) {
-        const stem = entry.slice(0, -3);
-        assert.ok(CORE_SKILLS.has(stem), `unexpected skill staged: ${stem}`);
-      }
-      // At least one file must be present (help.md exists in real commands/gsd)
-      assert.ok(entries.length >= 1, 'at least one skill file should be staged');
-    } finally {
-      // stagedDir is managed by stageSkillsForProfile — just verify, don't cleanup manually
+    // stagedDir is managed by stageSkillsForProfile — just verify, no manual cleanup needed
+    const entries = fs.readdirSync(stagedDir).filter(f => f.endsWith('.md'));
+    // All staged files must come from the selected skill set
+    for (const entry of entries) {
+      const stem = entry.slice(0, -3);
+      assert.ok(CORE_SKILLS.has(stem), `unexpected skill staged: ${stem}`);
     }
+    // At least one file must be present (help.md exists in real commands/gsd)
+    assert.ok(entries.length >= 1, 'at least one skill file should be staged');
   });
 });
 
@@ -63,19 +60,16 @@ describe('skills kind — stage (claude global)', () => {
     assert.ok(skillsKind, 'should have a skills kind');
 
     const stagedDir = skillsKind.stage(PROFILE_CORE);
-    try {
-      assert.ok(fs.existsSync(stagedDir), 'stagedDir must exist');
-      const entries = fs.readdirSync(stagedDir);
-      // Each entry should be a directory named gsd-<stem>
-      for (const entry of entries) {
-        assert.ok(entry.startsWith('gsd-'), `entry should start with gsd-: ${entry}`);
-        const skillMd = path.join(stagedDir, entry, 'SKILL.md');
-        assert.ok(fs.existsSync(skillMd), `SKILL.md must exist in ${entry}`);
-      }
-      assert.ok(entries.length >= 1, 'at least one skill dir should be staged');
-    } finally {
-      // managed by stageSkillsForRuntimeAsSkills
+    // managed by stageSkillsForRuntimeAsSkills — no manual cleanup needed
+    assert.ok(fs.existsSync(stagedDir), 'stagedDir must exist');
+    const entries = fs.readdirSync(stagedDir);
+    // Each entry should be a directory named gsd-<stem>
+    for (const entry of entries) {
+      assert.ok(entry.startsWith('gsd-'), `entry should start with gsd-: ${entry}`);
+      const skillMd = path.join(stagedDir, entry, 'SKILL.md');
+      assert.ok(fs.existsSync(skillMd), `SKILL.md must exist in ${entry}`);
     }
+    assert.ok(entries.length >= 1, 'at least one skill dir should be staged');
   });
 });
 
