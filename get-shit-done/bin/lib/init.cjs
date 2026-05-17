@@ -105,7 +105,8 @@ function getInitGitState(cwd) {
     try {
       const cdupResult = execGit(['rev-parse', '--show-cdup'], { cwd, timeout: 5000 });
       if (cdupResult.exitCode === 0) {
-        inNestedSubdir = String(cdupResult.stdout || '').trim().length > 0;
+        const cdup = String(cdupResult.stdout || '').trim().replace(/\\/g, '/');
+        inNestedSubdir = cdup.length > 0 && cdup !== '.' && cdup !== './';
       } else {
         inNestedSubdir = worktreeRoot !== null;
       }
