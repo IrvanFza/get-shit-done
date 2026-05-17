@@ -11436,6 +11436,7 @@ if (process.env.GSD_TEST_MODE) {
     rewriteLegacyManagedNodeHookCommands,
     buildCodexHookBlock,
     rewriteLegacyCodexHookBlock,
+    readGsdCommandNames,
   };
 } else {
 
