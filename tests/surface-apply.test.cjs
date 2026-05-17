@@ -227,6 +227,53 @@ describe('applySurface', () => {
     assert.ok(files.includes('help.md'), 'help.md should be present after applySurface on missing dest');
   });
 
+  test('Hermes profile shrink: stale GSD skill dirs are removed; user skills preserved', (t) => {
+    const { _syncGsdDir } = require('../get-shit-done/bin/lib/surface.cjs');
+
+    const base = createTempDir('gsd-surface-hermes-shrink-');
+    t.after(() => cleanup(base));
+    const stagedDir = path.join(base, 'staged');
+    const destDir = path.join(base, 'dest');
+    fs.mkdirSync(destDir, { recursive: true });
+
+    // Staged: only gsd-executor (profile shrunk — gsd-planner no longer in profile)
+    fs.mkdirSync(path.join(stagedDir, 'gsd-executor'), { recursive: true });
+    fs.writeFileSync(path.join(stagedDir, 'gsd-executor', 'SKILL.md'), '# executor\n', 'utf8');
+
+    // Dest already has: gsd-executor (keep), gsd-planner (stale GSD), user-skill (user-owned)
+    fs.mkdirSync(path.join(destDir, 'gsd-executor'), { recursive: true });
+    fs.writeFileSync(path.join(destDir, 'gsd-executor', 'SKILL.md'), '# executor\n', 'utf8');
+    fs.mkdirSync(path.join(destDir, 'gsd-planner'), { recursive: true });
+    fs.writeFileSync(path.join(destDir, 'gsd-planner', 'SKILL.md'), '# planner\n', 'utf8');
+    fs.mkdirSync(path.join(destDir, 'user-skill'), { recursive: true });
+    fs.writeFileSync(path.join(destDir, 'user-skill', 'SKILL.md'), '# user\n', 'utf8');
+
+    // Manifest contains gsd-executor and gsd-planner as canonical GSD skills.
+    // user-skill is NOT in manifest (user-owned).
+    const manifest = new Map([
+      ['gsd-executor', []],
+      ['gsd-planner', []],
+    ]);
+
+    // Hermes kind: empty prefix, destSubpath = skills/gsd
+    const hermesKind = { kind: 'skills', destSubpath: 'skills/gsd', prefix: '', stage: () => stagedDir };
+
+    _syncGsdDir(stagedDir, destDir, hermesKind, manifest);
+
+    assert.ok(
+      fs.existsSync(path.join(destDir, 'gsd-executor', 'SKILL.md')),
+      'gsd-executor should be kept (in staged set)'
+    );
+    assert.ok(
+      !fs.existsSync(path.join(destDir, 'gsd-planner')),
+      'gsd-planner should be removed (in manifest but not in staged set — stale GSD skill)'
+    );
+    assert.ok(
+      fs.existsSync(path.join(destDir, 'user-skill', 'SKILL.md')),
+      'user-skill should be preserved (not in manifest — user-owned)'
+    );
+  });
+
   test('_syncGsdDir skills kind (hermes): preserves non-GSD user dir under skills/gsd/ when kindPrefix is empty', (t) => {
     const { _syncGsdDir } = require('../get-shit-done/bin/lib/surface.cjs');
 
