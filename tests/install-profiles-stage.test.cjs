@@ -43,6 +43,13 @@ describe('stageSkillsForRuntimeAsSkills', () => {
     assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
   });
 
+  test('non-existent srcCommandsDir returns srcCommandsDir unchanged', () => {
+    const ghost = path.join(os.tmpdir(), 'gsd-rta-no-exist-' + Date.now());
+    const converter = (content, _skillName) => content;
+    const result = stageSkillsForRuntimeAsSkills(ghost, { skills: '*' }, converter, 'gsd-');
+    assert.strictEqual(result, ghost);
+  });
+
   test('empty prefix produces <stem>/SKILL.md without prefix segment', () => {
     const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
     let stagedDir;
