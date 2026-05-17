@@ -118,9 +118,9 @@ Valid cluster names: `core_loop`, `audit_review`, `milestone`, `research_ideate`
 # Claude Code
 RUNTIME_CONFIG_DIR=~/.claude/skills
 
-# Resolve commandsDir and agentsDir
-COMMANDS_DIR=~/.claude/commands/gsd
-AGENTS_DIR=~/.claude/agents
+# Artifact destinations are derived from runtime layout
+# via resolveRuntimeArtifactLayout(runtime, RUNTIME_CONFIG_DIR, scope)
+# then applySurface(RUNTIME_CONFIG_DIR, layout, manifest, CLUSTERS)
 ```
 
 All paths can be overridden by reading the `CLAUDE_CONFIG_DIR` env var if set.

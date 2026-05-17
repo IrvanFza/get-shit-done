@@ -46,18 +46,20 @@ describe('applySurface', () => {
     });
     const manifest = loadSkillsManifest(REAL_COMMANDS_DIR);
     const layout = resolveRuntimeArtifactLayout('claude', runtimeConfigDir, 'local');
-    applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
+    const resolved = applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
     const files = fs.readdirSync(commandsDir).filter(f => f.endsWith('.md'));
     // Every file should be a real stem we know about
     for (const file of files) {
       assert.ok(fs.existsSync(path.join(REAL_COMMANDS_DIR, file)), `unexpected file: ${file}`);
     }
-    // At minimum core skills should be present
-    const coreStems = ['new-project', 'discuss-phase', 'plan-phase', 'execute-phase', 'help', 'update'];
-    for (const stem of coreStems) {
-      assert.ok(files.includes(`${stem}.md`), `core skill "${stem}" should be in commandsDir`);
-    }
+    // Core profile should materialize exactly the resolved core command set.
+    const expectedCore = [...resolved.skills].map(stem => `${stem}.md`).sort();
+    assert.deepStrictEqual(
+      [...files].sort(),
+      expectedCore,
+      'commandsDir should contain exactly core commands'
+    );
   });
 
   test('removes superseded files when profile shrinks', (t) => {
@@ -84,17 +86,23 @@ describe('applySurface', () => {
       explicitAdds: [],
       explicitRemoves: [],
     });
-    applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
+    const resolvedCore = applySurface(runtimeConfigDir, layout, manifest, CLUSTERS);
 
     const afterCore = new Set(fs.readdirSync(commandsDir).filter(f => f.endsWith('.md')));
 
     // core should be a subset of standard
     assert.ok(afterCore.size <= afterStandard.size, 'core should have fewer or equal files than standard');
 
-    // Files removed should not be in core set
-    const coreStems = new Set(['new-project', 'discuss-phase', 'plan-phase', 'execute-phase', 'help', 'update']);
+    // Core profile should materialize exactly the resolved core command set.
+    const expectedCore = [...resolvedCore.skills].map(stem => `${stem}.md`).sort();
+    assert.deepStrictEqual(
+      [...afterCore].sort(),
+      expectedCore,
+      'afterCore should contain exactly core commands'
+    );
+
+    // All files should still map to known real skills.
     for (const file of afterCore) {
-      const stem = file.slice(0, -3);
       assert.ok(
         fs.existsSync(path.join(REAL_COMMANDS_DIR, file)),
         `file in commandsDir not a real skill: ${file}`

@@ -204,7 +204,10 @@ function resolveSurface(runtimeConfigDir, manifest, clusterMap) {
  * @param {Object} [clusterMap]
  */
 function applySurface(runtimeConfigDir, layout, manifest, clusterMap) {
-  const resolved = resolveSurface(runtimeConfigDir, manifest, clusterMap);
+  if (path.resolve(runtimeConfigDir) !== path.resolve(layout.configDir)) {
+    throw new TypeError('applySurface runtimeConfigDir must match layout.configDir');
+  }
+  const resolved = resolveSurface(layout.configDir, manifest, clusterMap);
   for (const kind of layout.kinds) {
     const staged = kind.stage(resolved);
     const dest = path.join(layout.configDir, kind.destSubpath);
