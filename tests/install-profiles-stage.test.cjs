@@ -43,6 +43,23 @@ describe('stageSkillsForRuntimeAsSkills', () => {
     assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
   });
 
+  test('skills Set filters: only matching stems land in stagedDir', () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
+    let stagedDir;
+    try {
+      for (const name of ['alpha', 'beta', 'phase']) {
+        fs.writeFileSync(path.join(src, `${name}.md`), `# ${name}\n`);
+      }
+      const converter = (content, _skillName) => content;
+      stagedDir = stageSkillsForRuntimeAsSkills(src, { skills: new Set(['phase']) }, converter, 'gsd-');
+      const entries = fs.readdirSync(stagedDir).sort();
+      assert.deepStrictEqual(entries, ['gsd-phase']);
+    } finally {
+      fs.rmSync(src, { recursive: true, force: true });
+      if (stagedDir) cleanupStagedSkills();
+    }
+  });
+
   test('skills === "*" stages all md files as <prefix><stem>/SKILL.md', () => {
     const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
     let stagedDir;
