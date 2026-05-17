@@ -159,12 +159,12 @@ describe('#3164 — validate consistency: milestone-archive layout', () => {
       `Old archived milestone phase 64 should not be treated as active:\n  ${phase64Warnings.join('\n  ')}`
     );
     assert.ok(
-      warningsPosix.some(w => w.includes('Gap in plan numbering in milestones/v1.7-phases/65-current')),
+      warningsPosix.some(w => /Gap in plan numbering in .*milestones\/v1\.7-phases\/65-current/.test(w)),
       `Expected plan numbering warning from active archive root, got:\n  ${warnings.join('\n  ')}`
     );
     assert.ok(
-      warningsPosix.some(w => w.includes("milestones/v1.7-phases/65-current/65-01-PLAN.md: missing 'wave'"))
-        || warningsPosix.some(w => w.includes("milestones/v1.7-phases/65-current/65-03-PLAN.md: missing 'wave'")),
+      warningsPosix.some(w => /milestones\/v1\.7-phases\/65-current\/65-01-PLAN\.md: missing 'wave'/.test(w))
+        || warningsPosix.some(w => /milestones\/v1\.7-phases\/65-current\/65-03-PLAN\.md: missing 'wave'/.test(w)),
       `Expected frontmatter warning from active archive plans, got:\n  ${warnings.join('\n  ')}`
     );
   });

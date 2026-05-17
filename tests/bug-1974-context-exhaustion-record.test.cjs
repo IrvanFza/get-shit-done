@@ -100,7 +100,18 @@ describe('#1974 context exhaustion auto-record', () => {
   });
 
   afterEach(() => {
-    cleanup(tmpDir);
+    const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        cleanup(tmpDir);
+        break;
+      } catch (err) {
+        const code = err && err.code;
+        const transient = code === 'EPERM' || code === 'EBUSY' || code === 'ENOTEMPTY';
+        if (!transient || attempt === 4) throw err;
+        sleep(250 * (attempt + 1));
+      }
+    }
     // Clean up bridge files
     try {
       const warnPath = path.join(os.tmpdir(), `claude-ctx-${sessionId}-warned.json`);

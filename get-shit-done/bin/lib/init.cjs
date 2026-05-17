@@ -98,7 +98,22 @@ function getInitGitState(cwd) {
     return resolved;
   };
 
-  let inNestedSubdir = info.inside && worktreeRoot !== null;
+  // Most reliable signal: git reports a non-empty prefix only when cwd is
+  // below the worktree root. This avoids short/long path alias issues on Windows.
+  let inNestedSubdir = false;
+  if (info.inside) {
+    try {
+      const prefixResult = execGit(['rev-parse', '--show-prefix'], { cwd, timeout: 5000 });
+      if (prefixResult.exitCode === 0) {
+        inNestedSubdir = String(prefixResult.stdout || '').trim().length > 0;
+      } else {
+        inNestedSubdir = worktreeRoot !== null;
+      }
+    } catch {
+      inNestedSubdir = worktreeRoot !== null;
+    }
+  }
+
   if (inNestedSubdir) {
     const rootNorm = normalizeForCompare(worktreeRoot);
     const cwdNorm = normalizeForCompare(cwd);
