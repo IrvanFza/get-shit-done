@@ -12,9 +12,11 @@ const os = require('os');
 const {
   stageSkillsForProfile,
   stageAgentsForProfile,
+  stageSkillsForRuntimeAsSkills,
   cleanupStagedSkills,
   resolveProfile,
   loadSkillsManifest,
+  STAGED_DIRS,
 } = require('../get-shit-done/bin/lib/install-profiles.cjs');
 
 const REAL_COMMANDS_DIR = path.join(__dirname, '..', 'commands', 'gsd');
@@ -35,6 +37,12 @@ function createFixtureAgentsDir() {
   }
   return tmp;
 }
+
+describe('stageSkillsForRuntimeAsSkills', () => {
+  test('is exported as a function', () => {
+    assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
+  });
+});
 
 describe('stageSkillsForProfile', () => {
   test('full profile (skills === "*") returns srcDir unchanged', () => {

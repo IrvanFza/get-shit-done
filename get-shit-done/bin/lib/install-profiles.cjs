@@ -373,6 +373,10 @@ function stageAgentsForProfile(srcAgentsDir, resolvedProfile) {
   return stageDir;
 }
 
+function stageSkillsForRuntimeAsSkills(srcCommandsDir, resolvedProfile, converter, prefix) {
+  // stub
+}
+
 // ---------------------------------------------------------------------------
 // Profile marker persistence
 // ---------------------------------------------------------------------------
@@ -560,6 +564,8 @@ module.exports = {
   mostRestrictiveProfile,
   stageSkillsForProfile,
   stageAgentsForProfile,
+  stageSkillsForRuntimeAsSkills,
+  STAGED_DIRS,
   readActiveProfile,
   writeActiveProfile,
   // Shared internals
