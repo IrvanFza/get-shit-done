@@ -327,7 +327,7 @@ function listSurface(runtimeConfigDir, manifest, clusterMap) {
   const disabled = allStems.filter(s => !enabledSet.has(s)).sort();
 
   // Compute token cost by reading descriptions from the install source
-  const srcCommandsDir = findInstallSourceRoot();
+  const srcCommandsDir = findInstallSourceRoot(runtimeConfigDir);
   let tokenCost = 0;
   for (const stem of enabled) {
     const filePath = path.join(srcCommandsDir, `${stem}.md`);

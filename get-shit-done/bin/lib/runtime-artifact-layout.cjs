@@ -50,14 +50,29 @@ const {
 // ---------------------------------------------------------------------------
 
 /**
- * Walk up from __dirname to find commands/gsd. Walk-up-only for Phase 1;
- * the .gsd-source marker check (which requires runtimeConfigDir) is deferred.
+ * Locate the GSD commands/gsd source directory.
  *
- * @param {string} [overrideRoot] optional override for testability
+ * Resolution order:
+ * 1. If runtimeConfigDir provided, check <runtimeConfigDir>/.gsd-source marker.
+ * 2. Walk up from __dirname using path.dirname (no literal .. segments).
+ * 3. Throw a descriptive error if neither succeeds.
+ *
+ * @param {string} [runtimeConfigDir] optional runtime config directory
  * @returns {string}
  */
-function findInstallSourceRoot(overrideRoot) {
-  if (overrideRoot) return overrideRoot;
+function findInstallSourceRoot(runtimeConfigDir) {
+  // Step 1: marker check
+  if (runtimeConfigDir) {
+    const markerPath = path.join(runtimeConfigDir, '.gsd-source');
+    if (fs.existsSync(markerPath)) {
+      try {
+        const src = fs.readFileSync(markerPath, 'utf8').trim();
+        if (src && fs.existsSync(src)) return src;
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Step 2: walk up from __dirname
   let dir = __dirname;
   for (let i = 0; i < 6; i++) {
     const candidate = path.join(dir, 'commands', 'gsd');
@@ -66,17 +81,38 @@ function findInstallSourceRoot(overrideRoot) {
     if (parent === dir) break;
     dir = parent;
   }
+
   throw new Error(`findInstallSourceRoot: could not locate commands/gsd from ${__dirname}`);
 }
 
 /**
- * Walk up from __dirname to find agents/. Walk-up-only for Phase 1.
+ * Locate the GSD agents source directory.
  *
- * @param {string} [overrideRoot] optional override for testability
- * @returns {string|null}
+ * Resolution order:
+ * 1. If runtimeConfigDir provided, check <runtimeConfigDir>/.gsd-source marker.
+ * 2. Walk up from __dirname using path.dirname (no literal .. segments).
+ * 3. Throw a descriptive error if neither succeeds.
+ *
+ * @param {string} [runtimeConfigDir] optional runtime config directory
+ * @returns {string}
  */
-function findAgentsSourceRoot(overrideRoot) {
-  if (overrideRoot) return overrideRoot;
+function findAgentsSourceRoot(runtimeConfigDir) {
+  // Step 1: marker check
+  if (runtimeConfigDir) {
+    const markerPath = path.join(runtimeConfigDir, '.gsd-source');
+    if (fs.existsSync(markerPath)) {
+      try {
+        const src = fs.readFileSync(markerPath, 'utf8').trim();
+        if (src && fs.existsSync(src)) {
+          // Marker points to commands/gsd; agents/ is a sibling of commands/
+          const agentsCandidate = path.resolve(path.dirname(src), '..', 'agents');
+          if (fs.existsSync(agentsCandidate)) return agentsCandidate;
+        }
+      } catch { /* fall through */ }
+    }
+  }
+
+  // Step 2: walk up from __dirname
   let dir = __dirname;
   for (let i = 0; i < 6; i++) {
     const candidate = path.join(dir, 'agents');
@@ -85,6 +121,7 @@ function findAgentsSourceRoot(overrideRoot) {
     if (parent === dir) break;
     dir = parent;
   }
+
   throw new Error(`findAgentsSourceRoot: could not locate agents/ from ${__dirname}`);
 }
 
@@ -102,30 +139,30 @@ const ALLOWED_RUNTIMES = new Set([
 // Layout table builders
 // ---------------------------------------------------------------------------
 
-function commandsKind(destSubpath, prefix, srcOverride) {
+function commandsKind(destSubpath, prefix, configDir) {
   return {
     kind: 'commands',
     destSubpath,
     prefix,
-    stage: (resolved) => stageSkillsForProfile(findInstallSourceRoot(srcOverride), resolved),
+    stage: (resolved) => stageSkillsForProfile(findInstallSourceRoot(configDir), resolved),
   };
 }
 
-function agentsKind(destSubpath, prefix, srcOverride) {
+function agentsKind(destSubpath, prefix, configDir) {
   return {
     kind: 'agents',
     destSubpath,
     prefix,
-    stage: (resolved) => stageAgentsForProfile(findAgentsSourceRoot(srcOverride), resolved),
+    stage: (resolved) => stageAgentsForProfile(findAgentsSourceRoot(configDir), resolved),
   };
 }
 
-function skillsKind(destSubpath, prefix, converter, srcOverride) {
+function skillsKind(destSubpath, prefix, converter, configDir) {
   return {
     kind: 'skills',
     destSubpath,
     prefix,
-    stage: (resolved) => stageSkillsForRuntimeAsSkills(findInstallSourceRoot(srcOverride), resolved, converter, prefix),
+    stage: (resolved) => stageSkillsForRuntimeAsSkills(findInstallSourceRoot(configDir), resolved, converter, prefix),
   };
 }
 
@@ -157,56 +194,56 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
     case 'claude':
       if (scope === 'local') {
         kinds = [
-          commandsKind('commands/gsd', 'gsd-'),
-          agentsKind('agents', 'gsd-'),
+          commandsKind('commands/gsd', 'gsd-', configDir),
+          agentsKind('agents', 'gsd-', configDir),
         ];
       } else {
-        kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill)];
+        kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill, configDir)];
       }
       break;
 
     case 'cursor':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCursorSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCursorSkill, configDir)];
       break;
 
     case 'gemini':
-      kinds = [commandsKind('commands/gsd', 'gsd-')];
+      kinds = [commandsKind('commands/gsd', 'gsd-', configDir)];
       break;
 
     case 'codex':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodexSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodexSkill, configDir)];
       break;
 
     case 'copilot':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCopilotSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCopilotSkill, configDir)];
       break;
 
     case 'antigravity':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAntigravitySkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAntigravitySkill, configDir)];
       break;
 
     case 'windsurf':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToWindsurfSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToWindsurfSkill, configDir)];
       break;
 
     case 'augment':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAugmentSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAugmentSkill, configDir)];
       break;
 
     case 'trae':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToTraeSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToTraeSkill, configDir)];
       break;
 
     case 'qwen':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill, configDir)];
       break;
 
     case 'hermes':
-      kinds = [skillsKind('skills/gsd', '', convertClaudeCommandToClaudeSkill)];
+      kinds = [skillsKind('skills/gsd', '', convertClaudeCommandToClaudeSkill, configDir)];
       break;
 
     case 'codebuddy':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodebuddySkill)];
+      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodebuddySkill, configDir)];
       break;
 
     case 'cline':
@@ -214,11 +251,11 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
       break;
 
     case 'opencode':
-      kinds = [commandsKind('command', 'gsd-')];
+      kinds = [commandsKind('command', 'gsd-', configDir)];
       break;
 
     case 'kilo':
-      kinds = [commandsKind('command', 'gsd-')];
+      kinds = [commandsKind('command', 'gsd-', configDir)];
       break;
 
     default:
