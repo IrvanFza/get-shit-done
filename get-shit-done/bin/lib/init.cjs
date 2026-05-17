@@ -98,24 +98,8 @@ function getInitGitState(cwd) {
     return resolved;
   };
 
-  // Most reliable signal: git reports non-empty `--show-cdup` only when cwd is
-  // below the worktree root. This avoids short/long path alias issues on Windows.
   let inNestedSubdir = false;
   if (info.inside) {
-    try {
-      const cdupResult = execGit(['rev-parse', '--show-cdup'], { cwd, timeout: 5000 });
-      if (cdupResult.exitCode === 0) {
-        const cdup = String(cdupResult.stdout || '').trim().replace(/\\/g, '/');
-        inNestedSubdir = cdup.length > 0 && cdup !== '.' && cdup !== './';
-      } else {
-        inNestedSubdir = worktreeRoot !== null;
-      }
-    } catch {
-      inNestedSubdir = worktreeRoot !== null;
-    }
-  }
-
-  if (inNestedSubdir) {
     const rootNorm = normalizeForCompare(worktreeRoot);
     const cwdNorm = normalizeForCompare(cwd);
     if (rootNorm && cwdNorm) {
@@ -129,6 +113,19 @@ function getInitGitState(cwd) {
           relNorm !== '.' &&
           !relNorm.startsWith('..') &&
           !path.isAbsolute(relNorm);
+      }
+    } else {
+      // Fallback only when root/cwd normalization fails.
+      try {
+        const cdupResult = execGit(['rev-parse', '--show-cdup'], { cwd, timeout: 5000 });
+        if (cdupResult.exitCode === 0) {
+          const cdup = String(cdupResult.stdout || '').trim().replace(/\\/g, '/');
+          inNestedSubdir = cdup.length > 0 && cdup !== '.' && cdup !== './';
+        } else {
+          inNestedSubdir = worktreeRoot !== null;
+        }
+      } catch {
+        inNestedSubdir = worktreeRoot !== null;
       }
     }
   }
