@@ -43,6 +43,23 @@ describe('stageSkillsForRuntimeAsSkills', () => {
     assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
   });
 
+  test('empty prefix produces <stem>/SKILL.md without prefix segment', () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
+    let stagedDir;
+    try {
+      fs.writeFileSync(path.join(src, 'phase.md'), '# phase\n');
+      const converter = (content, _skillName) => content;
+      stagedDir = stageSkillsForRuntimeAsSkills(src, { skills: '*' }, converter, '');
+      const entries = fs.readdirSync(stagedDir);
+      assert.deepStrictEqual(entries, ['phase']);
+      const content = fs.readFileSync(path.join(stagedDir, 'phase', 'SKILL.md'), 'utf8');
+      assert.strictEqual(content, '# phase\n');
+    } finally {
+      fs.rmSync(src, { recursive: true, force: true });
+      if (stagedDir) cleanupStagedSkills();
+    }
+  });
+
   test('converter is called with (content, skillName) for each kept skill', () => {
     const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
     let stagedDir;
