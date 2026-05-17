@@ -43,6 +43,21 @@ describe('stageSkillsForRuntimeAsSkills', () => {
     assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
   });
 
+  test('registers stagedDir in STAGED_DIRS after staging', () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
+    let stagedDir;
+    try {
+      fs.writeFileSync(path.join(src, 'alpha.md'), '# alpha\n');
+      cleanupStagedSkills();
+      const converter = (content, _skillName) => content;
+      stagedDir = stageSkillsForRuntimeAsSkills(src, { skills: '*' }, converter, 'gsd-');
+      assert.ok(STAGED_DIRS.has(stagedDir), 'stagedDir must be in STAGED_DIRS');
+    } finally {
+      fs.rmSync(src, { recursive: true, force: true });
+      if (stagedDir) cleanupStagedSkills();
+    }
+  });
+
   test('non-existent srcCommandsDir returns srcCommandsDir unchanged', () => {
     const ghost = path.join(os.tmpdir(), 'gsd-rta-no-exist-' + Date.now());
     const converter = (content, _skillName) => content;
