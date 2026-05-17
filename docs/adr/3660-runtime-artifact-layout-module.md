@@ -1,8 +1,9 @@
 # Runtime Artifact Layout Module owns per-runtime artifact placement
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-05-17
 - **Issue:** #3660
+- **Implementation:** #3663 (Phase 1), feat/3663-runtime-artifact-layout-module-phase-1-m
 
 The **Runtime Surface Module** (`get-shit-done/bin/lib/surface.cjs`, introduced by ADR-0011 Phase 2) re-materializes a resolved Skill Surface profile to disk via `applySurface`. It currently hardcodes two artifact kinds (`commands`, `agents`) and re-derives their source directories via `_findInstallSource` / `_findAgentsSource` walk-up heuristics. The install and uninstall pipelines in `bin/install.js` each encode the same per-runtime artifact layout independently across ~14 install sites and ~6 uninstall sites. Bug #3659 surfaced the resulting drift: `applySurface` omits the `skills` kind for runtimes whose canonical layout is `skills/gsd-<stem>/SKILL.md`, so `gsd-surface profile <name>` leaves ~67 skill directories on disk under the install-time profile's footprint when the resolved profile should have pruned them — roughly 2.7k tokens per session on a measured workstation.
 
@@ -134,3 +135,13 @@ function applySurface(runtimeConfigDir, layout, manifest, clusterMap) {
 - Existing canonical sibling: `get-shit-done/bin/lib/runtime-homes.cjs`
 - Per-runtime skill converters this module references: `bin/install.js:1622` (Copilot), `:1681` (Claude), `:1792` (Antigravity), `:2534` (Codex)
 - Hermes nested-skills layout rationale: `#2841`
+
+## Implementation status
+
+Phase 1 implementation landed on `feat/3663-runtime-artifact-layout-module-phase-1-m`:
+- `get-shit-done/bin/lib/runtime-artifact-layout.cjs` — 15-runtime layout table (grok intentionally excluded), `resolveRuntimeArtifactLayout(runtime, configDir, scope) → Layout`, walk-up `findInstallSourceRoot` helper.
+- `get-shit-done/bin/lib/install-profiles.cjs` — new `stageSkillsForRuntimeAsSkills(srcCommandsDir, resolvedProfile, converter, prefix) → stagedDir` helper.
+- `get-shit-done/bin/lib/surface.cjs` — `applySurface(runtimeConfigDir, layout, manifest, clusterMap)` signature migration; `_findInstallSource` + `_findAgentsSource` deleted; `_syncGsdDir` extended to handle the `skills` kind via directory iteration.
+- Tests: `runtime-artifact-layout-resolve.test.cjs` (16), `runtime-artifact-layout-edge-cases.test.cjs` (10), `runtime-artifact-layout-stage.test.cjs` (5), `install-profiles-stage.test.cjs` (+7 new), `surface-apply.test.cjs` (updated 5 call sites + new skills-kind test).
+
+Phase 2 (separate issue #3664 — `bin/install.js` install/uninstall pipeline migration) is blocked on Phase 1 merge.
