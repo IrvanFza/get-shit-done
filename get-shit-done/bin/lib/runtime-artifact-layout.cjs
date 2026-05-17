@@ -18,19 +18,34 @@ const {
   stageSkillsForRuntimeAsSkills,
 } = require('./install-profiles.cjs');
 
-// Load converters from bin/install.js in test-safe way (GSD_TEST_MODE skips main logic)
-process.env.GSD_TEST_MODE = process.env.GSD_TEST_MODE || '1';
-const {
-  convertClaudeCommandToClaudeSkill,
-  convertClaudeCommandToCursorSkill,
-  convertClaudeCommandToCodexSkill,
-  convertClaudeCommandToCopilotSkill,
-  convertClaudeCommandToAntigravitySkill,
-  convertClaudeCommandToWindsurfSkill,
-  convertClaudeCommandToAugmentSkill,
-  convertClaudeCommandToTraeSkill,
-  convertClaudeCommandToCodebuddySkill,
-} = require('../../../bin/install.js');
+// ---------------------------------------------------------------------------
+// Lazy installer exports (avoids GSD_TEST_MODE env mutation at module load)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load bin/install.js exports in a test-safe way.
+ * Sets GSD_TEST_MODE only for the duration of the require() call and only if
+ * it was not already set, restoring the original value in a finally block so
+ * the module-level environment is never permanently mutated.
+ */
+function loadInstallExports() {
+  const savedTestMode = process.env.GSD_TEST_MODE;
+  if (savedTestMode === undefined) process.env.GSD_TEST_MODE = '1';
+  try {
+    // eslint-disable-next-line global-require -- lazy import to avoid running installer at module load
+    return require('../../../bin/install.js');
+  } finally {
+    if (savedTestMode === undefined) delete process.env.GSD_TEST_MODE;
+    else process.env.GSD_TEST_MODE = savedTestMode;
+  }
+}
+
+/** Cache after first successful load. */
+let _installExports = null;
+function getInstallExports() {
+  if (!_installExports) _installExports = loadInstallExports();
+  return _installExports;
+}
 
 /**
  * @typedef {'commands'|'agents'|'skills'} ArtifactKindName
@@ -157,12 +172,23 @@ function agentsKind(destSubpath, prefix, configDir) {
   };
 }
 
-function skillsKind(destSubpath, prefix, converter, configDir) {
+/**
+ * Build a skills kind descriptor.
+ *
+ * @param {string} destSubpath
+ * @param {string} prefix
+ * @param {string} converterName  name of converter function in bin/install.js exports
+ * @param {string} configDir      runtime config dir (for .gsd-source marker resolution)
+ */
+function skillsKind(destSubpath, prefix, converterName, configDir) {
   return {
     kind: 'skills',
     destSubpath,
     prefix,
-    stage: (resolved) => stageSkillsForRuntimeAsSkills(findInstallSourceRoot(configDir), resolved, converter, prefix),
+    stage: (resolved) => {
+      const converter = getInstallExports()[converterName];
+      return stageSkillsForRuntimeAsSkills(findInstallSourceRoot(configDir), resolved, converter, prefix);
+    },
   };
 }
 
@@ -198,12 +224,12 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
           agentsKind('agents', 'gsd-', configDir),
         ];
       } else {
-        kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill, configDir)];
+        kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', configDir)];
       }
       break;
 
     case 'cursor':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCursorSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCursorSkill', configDir)];
       break;
 
     case 'gemini':
@@ -211,39 +237,39 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
       break;
 
     case 'codex':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodexSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodexSkill', configDir)];
       break;
 
     case 'copilot':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCopilotSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCopilotSkill', configDir)];
       break;
 
     case 'antigravity':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAntigravitySkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAntigravitySkill', configDir)];
       break;
 
     case 'windsurf':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToWindsurfSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToWindsurfSkill', configDir)];
       break;
 
     case 'augment':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToAugmentSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAugmentSkill', configDir)];
       break;
 
     case 'trae':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToTraeSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToTraeSkill', configDir)];
       break;
 
     case 'qwen':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToClaudeSkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', configDir)];
       break;
 
     case 'hermes':
-      kinds = [skillsKind('skills/gsd', '', convertClaudeCommandToClaudeSkill, configDir)];
+      kinds = [skillsKind('skills/gsd', '', 'convertClaudeCommandToClaudeSkill', configDir)];
       break;
 
     case 'codebuddy':
-      kinds = [skillsKind('skills', 'gsd-', convertClaudeCommandToCodebuddySkill, configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodebuddySkill', configDir)];
       break;
 
     case 'cline':
