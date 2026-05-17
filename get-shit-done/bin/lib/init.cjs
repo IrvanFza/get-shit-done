@@ -98,14 +98,14 @@ function getInitGitState(cwd) {
     return resolved;
   };
 
-  // Most reliable signal: git reports a non-empty prefix only when cwd is
+  // Most reliable signal: git reports non-empty `--show-cdup` only when cwd is
   // below the worktree root. This avoids short/long path alias issues on Windows.
   let inNestedSubdir = false;
   if (info.inside) {
     try {
-      const prefixResult = execGit(['rev-parse', '--show-prefix'], { cwd, timeout: 5000 });
-      if (prefixResult.exitCode === 0) {
-        inNestedSubdir = String(prefixResult.stdout || '').trim().length > 0;
+      const cdupResult = execGit(['rev-parse', '--show-cdup'], { cwd, timeout: 5000 });
+      if (cdupResult.exitCode === 0) {
+        inNestedSubdir = String(cdupResult.stdout || '').trim().length > 0;
       } else {
         inNestedSubdir = worktreeRoot !== null;
       }
