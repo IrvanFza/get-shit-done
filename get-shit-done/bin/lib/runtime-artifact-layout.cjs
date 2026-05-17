@@ -66,7 +66,7 @@ function findInstallSourceRoot(overrideRoot) {
     if (parent === dir) break;
     dir = parent;
   }
-  return path.join(__dirname, '..', '..', '..', 'commands', 'gsd');
+  throw new Error(`findInstallSourceRoot: could not locate commands/gsd from ${__dirname}`);
 }
 
 /**
@@ -85,7 +85,7 @@ function findAgentsSourceRoot(overrideRoot) {
     if (parent === dir) break;
     dir = parent;
   }
-  return null;
+  throw new Error(`findAgentsSourceRoot: could not locate agents/ from ${__dirname}`);
 }
 
 // ---------------------------------------------------------------------------
