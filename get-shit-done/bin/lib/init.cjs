@@ -100,31 +100,32 @@ function getInitGitState(cwd) {
 
   let inNestedSubdir = false;
   if (info.inside) {
-    const rootNorm = normalizeForCompare(worktreeRoot);
-    const cwdNorm = normalizeForCompare(cwd);
-    if (rootNorm && cwdNorm) {
-      if (rootNorm === cwdNorm) {
-        inNestedSubdir = false;
-      } else {
-        const rel = path.relative(rootNorm, cwdNorm);
-        const relNorm = process.platform === 'win32' ? rel.replace(/\//g, '\\') : rel;
-        inNestedSubdir =
-          relNorm !== '' &&
-          relNorm !== '.' &&
-          !relNorm.startsWith('..') &&
-          !path.isAbsolute(relNorm);
+    let resolvedByGitPrefix = false;
+    try {
+      const prefixResult = execGit(['rev-parse', '--show-prefix'], { cwd, timeout: 5000 });
+      if (prefixResult.exitCode === 0) {
+        const prefix = String(prefixResult.stdout || '').trim().replace(/\\/g, '/');
+        inNestedSubdir = prefix.length > 0 && prefix !== '.' && prefix !== './';
+        resolvedByGitPrefix = true;
       }
-    } else {
-      // Fallback only when root/cwd normalization fails.
-      try {
-        const cdupResult = execGit(['rev-parse', '--show-cdup'], { cwd, timeout: 5000 });
-        if (cdupResult.exitCode === 0) {
-          const cdup = String(cdupResult.stdout || '').trim().replace(/\\/g, '/');
-          inNestedSubdir = cdup.length > 0 && cdup !== '.' && cdup !== './';
+    } catch {}
+
+    if (!resolvedByGitPrefix) {
+      const rootNorm = normalizeForCompare(worktreeRoot);
+      const cwdNorm = normalizeForCompare(cwd);
+      if (rootNorm && cwdNorm) {
+        if (rootNorm === cwdNorm) {
+          inNestedSubdir = false;
         } else {
-          inNestedSubdir = worktreeRoot !== null;
+          const rel = path.relative(rootNorm, cwdNorm);
+          const relNorm = process.platform === 'win32' ? rel.replace(/\//g, '\\') : rel;
+          inNestedSubdir =
+            relNorm !== '' &&
+            relNorm !== '.' &&
+            !relNorm.startsWith('..') &&
+            !path.isAbsolute(relNorm);
         }
-      } catch {
+      } else {
         inNestedSubdir = worktreeRoot !== null;
       }
     }
