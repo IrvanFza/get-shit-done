@@ -43,6 +43,28 @@ describe('stageSkillsForRuntimeAsSkills', () => {
     assert.strictEqual(typeof stageSkillsForRuntimeAsSkills, 'function');
   });
 
+  test('converter is called with (content, skillName) for each kept skill', () => {
+    const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
+    let stagedDir;
+    try {
+      fs.writeFileSync(path.join(src, 'alpha.md'), '# alpha\n');
+      fs.writeFileSync(path.join(src, 'beta.md'), '# beta\n');
+      const calls = [];
+      const converter = (content, skillName) => {
+        calls.push([content, skillName]);
+        return content;
+      };
+      stagedDir = stageSkillsForRuntimeAsSkills(src, { skills: '*' }, converter, 'x-');
+      assert.strictEqual(calls.length, 2);
+      const callMap = Object.fromEntries(calls.map(([c, n]) => [n, c]));
+      assert.strictEqual(callMap['x-alpha'], '# alpha\n');
+      assert.strictEqual(callMap['x-beta'], '# beta\n');
+    } finally {
+      fs.rmSync(src, { recursive: true, force: true });
+      if (stagedDir) cleanupStagedSkills();
+    }
+  });
+
   test('skills Set filters: only matching stems land in stagedDir', () => {
     const src = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-rta-src-'));
     let stagedDir;
