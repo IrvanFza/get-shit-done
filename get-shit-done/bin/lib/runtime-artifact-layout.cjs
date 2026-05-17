@@ -178,16 +178,23 @@ function agentsKind(destSubpath, prefix, configDir) {
  * @param {string} destSubpath
  * @param {string} prefix
  * @param {string} converterName  name of converter function in bin/install.js exports
+ * @param {string} runtime        canonical runtime ID (gates Hermes/Qwen branding in converter)
  * @param {string} configDir      runtime config dir (for .gsd-source marker resolution)
  */
-function skillsKind(destSubpath, prefix, converterName, configDir) {
+function skillsKind(destSubpath, prefix, converterName, runtime, configDir) {
   return {
     kind: 'skills',
     destSubpath,
     prefix,
     stage: (resolved) => {
-      const converter = getInstallExports()[converterName];
-      return stageSkillsForRuntimeAsSkills(findInstallSourceRoot(configDir), resolved, converter, prefix);
+      const installExports = getInstallExports();
+      const realConverter = installExports[converterName];
+      // Compute cmdNames once per stage call for performance (#3583).
+      // Extra args are ignored by converters that don't need runtime/cmdNames.
+      const cmdNames = installExports.readGsdCommandNames();
+      const wrappedConverter = (content, skillName) =>
+        realConverter(content, skillName, runtime, cmdNames);
+      return stageSkillsForRuntimeAsSkills(findInstallSourceRoot(configDir), resolved, wrappedConverter, prefix);
     },
   };
 }
@@ -224,12 +231,12 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
           agentsKind('agents', 'gsd-', configDir),
         ];
       } else {
-        kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', configDir)];
+        kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', 'claude', configDir)];
       }
       break;
 
     case 'cursor':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCursorSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCursorSkill', 'cursor', configDir)];
       break;
 
     case 'gemini':
@@ -237,39 +244,39 @@ function resolveRuntimeArtifactLayout(runtime, configDir, scope = 'global') {
       break;
 
     case 'codex':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodexSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodexSkill', 'codex', configDir)];
       break;
 
     case 'copilot':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCopilotSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCopilotSkill', 'copilot', configDir)];
       break;
 
     case 'antigravity':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAntigravitySkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAntigravitySkill', 'antigravity', configDir)];
       break;
 
     case 'windsurf':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToWindsurfSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToWindsurfSkill', 'windsurf', configDir)];
       break;
 
     case 'augment':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAugmentSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToAugmentSkill', 'augment', configDir)];
       break;
 
     case 'trae':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToTraeSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToTraeSkill', 'trae', configDir)];
       break;
 
     case 'qwen':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToClaudeSkill', 'qwen', configDir)];
       break;
 
     case 'hermes':
-      kinds = [skillsKind('skills/gsd', '', 'convertClaudeCommandToClaudeSkill', configDir)];
+      kinds = [skillsKind('skills/gsd', '', 'convertClaudeCommandToClaudeSkill', 'hermes', configDir)];
       break;
 
     case 'codebuddy':
-      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodebuddySkill', configDir)];
+      kinds = [skillsKind('skills', 'gsd-', 'convertClaudeCommandToCodebuddySkill', 'codebuddy', configDir)];
       break;
 
     case 'cline':
